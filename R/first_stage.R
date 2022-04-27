@@ -1,6 +1,5 @@
 # First stage function
 
-
 md_first_stage <- function(data1 = subsample, time_varying_var, dep_var, U) {
   if (length(time_varying_var > 0)) { # if there are no time varying variables.
   form <- as.formula(paste(dep_var, paste(time_varying_var, collapse = "+"), sep = "~"))
