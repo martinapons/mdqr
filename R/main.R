@@ -1,6 +1,6 @@
 library(purrrlyr)
 library(parallel)
-
+library(stringr)
 # rm(list = ls())
 
 # generate some random data to try it
@@ -25,49 +25,62 @@ quantile <- c(.1, .5)
 
 data <- ddata
 mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), cores = NULL) {
-
   formula <- Formula::as.Formula(formula)
-  mm <- model.frame(as.Formula(formula(formula, lhs = 1, rhs = -5)), data)
 
+  myvar <- all.vars(formula)
+  data <- select(data, all_of(myvar)) # eventually need to add cluster var.
+  data %<>% as_tibble() %>% drop_na()
 
   group <- model.frame(formula(formula, lhs = 0, rhs = 5), data)
   group_id <- names(group) # groups are define by this variable
   names(group) <- c("group")
 
-  mm <- cbind(mm, group)
 
-  mm %<>% as_tibble() %>% drop_na()
+#  mm <- model.frame(as.Formula(formula(formula, lhs = 1, rhs = -5)), data)
+ # mm <- cbind(mm, group)
+
 
   # drop too small groups ----------------------------------------
-  mm %<>%
+  data %<>%
     as_tibble() %>%
     group_by_at(vars(group)) %>%
     mutate(group = cur_group_id()) %>%
     ungroup()
 
-  mm <- mm %>% add_count(group) # number of observations in each group.
-  mm <- mm %>% filter(n >= 2) # remove groups with less than 25 obs
+  data <- data %>% add_count(group) # number of observations in each group.
+  data <- data %>% filter(n >= 2) # remove groups with less than 25 obs
 
-  mm %<>%
+  data %<>%
     as_tibble() %>%
     group_by_at(vars(group)) %>%
     mutate(group = cur_group_id()) %>%
     ungroup()
 
-  G <- max(mm$group)
+  G <- max(data$group)
   # ------------------------------------------------------------
 
   fdep <- formula(formula, lhs = 1, rhs = 0)
   fex <- formula(formula, lhs = 0, rhs = 1)
   fen <- formula(formula, lhs = 0, rhs = 2)
   ffe <- formula(formula, lhs = 0, rhs = 4)
-
-  y <- model.frame(fdep, mm)
-  exo <- model.frame(fex, mm)
-  end <- model.frame(fen, mm)
   fz <- formula(formula, lhs = 0, rhs = 3)
-  z <- model.frame(fz, mm)
-  fe <- model.frame(ffe, mm)
+
+  #dep_var <- str_sub(as.character(fdep), 1,  -5)
+
+  # strsplit(as.character(ffe), " + ")
+
+  y <- model.frame(fdep, data)
+  exo <- model.frame(fex, data)
+  end <- model.frame(fen, data)
+  z <- model.frame(fz, data)
+  fe <- model.frame(ffe, data)
+  # -----------------
+  dep_var <- names(y)
+  fe_var <- names(fe)
+  endog_var <- names(end)
+  exo_var <- names(exo)
+  inst_var <- names(z)
+
 
   if (dim(end)[2] > dim(z)[2] & method != "fe" & method != "ht") stop("fewer instruments than endogenous variables. If you wish to use interval instrument select method fe or ht")
   if (dim(end)[2] == 0 & dim(z)[2] > 0) stop("External instrument is specified, but there is no endogeous variable")
@@ -82,23 +95,16 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   # --------------------------------------------------------------
   # Matrix of regressors (notation as in the paper X: second stage, Xtilde: first stage)
   # tv <- (cbind(exo, end, group) %>% slice_rows("group") %>% dmap(var) %>% colSums() != 0)[-1] # TRUE if time varying
-  tv <-(cbind(exo, end, group) %>% slice_rows("group") %>% summarise(across(everything(), funs(n_distinct)))  %>% colSums()/G != 1)[-1]
+  tv <-(cbind(group, exo, end) %>% slice_rows("group") %>% summarise(across(everything(), funs(n_distinct)))  %>% colSums()/G != 1)[-1]
 
   time_varying <- data.frame(cbind(exo, end)[, tv])
-  time_varying_var <- c(names(tv)[tv == T])
-  time_constant_var <- c(names(tv)[tv == F])
-  dep_var <- names(y)
-  fe_var <- names(fe)
-  endog_var <- names(end)
-  exo_var <- names(exo)
-  inst_var <- names(z)
+  time_varying_var <- c(names(cbind(exo,end))[tv == T])   # I don't like this two lines. I would like to take the names from tv (but they change)
+  time_constant_var <- c(names(cbind(exo,end))[tv == F])
+
   names(time_varying) <- time_varying_var
 
-  second <- cbind(y, exo, end, z, fe, group)
-
-
   first <- cbind(y, time_varying, group)
-
+  first <- data # had to do it to allow for log() factor( ) variables
   datalist <- NULL
   first$g <- round(first$group * 0.001) + 1
   gg <- max(first$g)
@@ -141,7 +147,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
 
   mydep <- paste("fitted", U, sep = "_")
   colnames(fitted) <- mydep
-  second <- bind_cols(second, fitted)
+  second <- bind_cols(data, fitted)
 
   # pasted variables in strings:
   exo_s <- paste(exo_var, collapse = "+")
