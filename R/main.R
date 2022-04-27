@@ -43,40 +43,37 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   ffe <- formula(formula, lhs = 0, rhs = 4)
   fz <- formula(formula, lhs = 0, rhs = 3)
 
-  # dep_var <- str_sub(as.character(fdep), 1,  -5)
-
-  # strsplit(as.character(ffe), " + ")
-
   y <- model.frame(fdep, data)
-  exo <- model.frame(fex, data)
+ # exo <- model.frame(fex, data)
   end <- model.frame(fen, data)
   z <- model.frame(fz, data)
   fe <- model.frame(ffe, data)
   # -----------------
-  dep_var <- names(y)
-  fe_var <- names(fe)
+  ###dep_var <- names(y)
+  ###fe_var <- names(fe)
   endog_var <- names(end)
-  exo_var <- names(exo)
-  inst_var <- names(z)
+  ###exo_var <- names(exo)
+  ###inst_var <- names(z)
 
 
-  if (dim(end)[2] > dim(z)[2] & method != "fe" & method != "ht") stop("fewer instruments than endogenous variables. If you wish to use interval instrument select method fe or ht")
-  if (dim(end)[2] == 0 & dim(z)[2] > 0) stop("External instrument is specified, but there is no endogeous variable")
+  if (length(all.vars(fen)) > length(all.vars(fen)) & method != "fe" & method != "ht") stop("fewer instruments than endogenous variables. If you wish to use interval instrument select method fe or ht")
+  if (length(all.vars(fen))== 0 & length(all.vars(fen)) > 0) stop("External instrument is specified, but there is no endogeous variable")
   if (min(tapply(y[, 1], group[, 1], var) > 0) == 0) stop("The dependent variable must vary within groups / individuals.")
-  if (dim(end)[2] == 0 & method == "fe") stop("FE is used, but no endogenous variable specified.")
+  if (length(all.vars(fen)) == 0 & method == "fe") stop("FE is used, but no endogenous variable specified.")
+  if ( method == "ols" & length(all.vars(fen)) > 0) stop("OLS is used but there are endogenous variables.")
 
 
   if (sum(cbind(z, group) %>% slice_rows("group") %>% dmap(var) %>% colSums() != 0) != 1) {
     stop("The instrument is not allowed to vary within groups.")
   }
   # --------------------------------------------------------------
-  tv <- (cbind(group, exo, end) %>% slice_rows("group") %>% summarise(across(everything(), funs(n_distinct))) %>% colSums() / G != 1)[-1]
+###  tv <- (cbind(group, exo, end) %>% slice_rows("group") %>% summarise(across(everything(), funs(n_distinct))) %>% colSums() / G != 1)[-1]
 
-  time_varying <- data.frame(cbind(exo, end)[, tv])
-  time_varying_var <- c(names(cbind(exo, end))[tv == T]) # I don't like this two lines. I would like to take the names from tv (but they change)
-  time_constant_var <- c(names(cbind(exo, end))[tv == F])
+ ## time_varying <- data.frame(cbind(exo, end)[, tv])
+ ### time_varying_var <- c(names(cbind(exo, end))[tv == T]) # I don't like this two lines. I would like to take the names from tv (but they change)
+  ## time_constant_var <- c(names(cbind(exo, end))[tv == F])
 
-  names(time_varying) <- time_varying_var
+ ### names(time_varying) <- time_varying_var
 
   first <- data
   datalist <- NULL
@@ -100,7 +97,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   }
   cl <- makeCluster(cores) # Set the number of clusters
   RNGkind(kind = "L'Ecuyer-CMRG") # Set the seed for each cluster
-  clusterExport(cl, c("dep_var", "time_varying_var", "md_first_stage", "datalist", "U"), environment()) # Functions needed
+  clusterExport(cl, c("fdep", "md_first_stage", "datalist", "formula", "U"), environment()) # Functions needed
   clusterEvalQ(cl, {
     library(quantreg)
     library(sandwich)
@@ -108,7 +105,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     library(pracma)
     library(Matrix)
   })
-  first <- clusterApply(cl, datalist, md_first_stage, time_varying_var, dep_var, U)
+  first <- clusterApply(cl, datalist, md_first_stage, fdep, formula, U)
   stopCluster(cl)
 
   # Extract Fitted values: the fitted values are a list in a list. E

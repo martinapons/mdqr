@@ -1,7 +1,7 @@
 # First stage function
 
-md_first_stage <- function(data1 = subsample, time_varying_var, dep_var, U) {
-  if (length(time_varying_var > 0)) { # if there are no time varying variables.
+md_first_stage <- function(data1 = subsample, dep_var, U) {
+  ### if (length(time_varying_var > 0)) { # if there are no time varying variables.
     ### form <- as.formula(paste(dep_var, paste(time_varying_var, collapse = "+"), sep = "~"))
     mm <- model.matrix(formula, data1) # make model matrix
 
@@ -12,13 +12,17 @@ md_first_stage <- function(data1 = subsample, time_varying_var, dep_var, U) {
     mm <- mm[, keepp] # keep only non-collinear columns
     # form <- paste(dep_var, "~" , paste(colnames(mm)[-1], collapse  = "+"))
     # mm <- model.frame(formula(form), data1) # make model matrix
-  } else {
-    form <- as.formula(paste(dep_var, "1", sep = "~"))
-    mm <- stats::model.matrix(formula(form), data1) # make model matrix
-  }
+ ### } else {
+    ### form <- as.formula(paste(dep_var, "1", sep = "~"))
+    ### mm <- stats::model.matrix(formula(form), data1) # make model matrix
+###  }
 
   fitted <- array(NA, dim = c(dim(data1)[1], 1, length(U)))
+
   lambda_g <- array(0, dim = c(dim(mm)[2], dim(mm)[2], length(U))) # k = number of individual level regressors
+  if (is.null(c(dim(mm)[2]))){
+    lambda_g <- array(0, c(1,1, length(U)))
+  }
   y <- model.frame(fdep, data1)[, 1]
   for (u in U) { # For all quantiles
     qreg <- rq(y ~ mm - 1, data = data1, tau = u)
