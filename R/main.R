@@ -1,29 +1,12 @@
 library(purrrlyr)
 library(parallel)
 library(stringr)
-# rm(list = ls())
-
-# generate some random data to try it
-ddata <- NULL
-x1 <- rnorm(100)
-ddata <- as.data.frame(x1)
-ddata$x11 <- rnorm(100)
-
-ddata$ggroup <- rep(1:10, each = 10)
-ddata$x2 <- rep(rnorm(10), each = 10)
-ddata$x22 <- rep(rnorm(10), each = 10)
-ddata$z <- ddata$x2 + rep(rnorm(10), each = 10)
-ddata$z2 <- ddata$x22 + rep(rnorm(10), each = 10)
-
-ddata$dep <- ddata$x1 + ddata$x2 + rnorm(100)
-ddata$fe <- c(rep(1, times = 50), rep(0, times = 50))
-ddata$fe2 <- c(rep(1, times = 30), rep(0, times = 70))
 library(Formula)
 library(formula.tools)
 
 quantile <- c(.1, .5)
 
-data <- ddata
+data <- d
 mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), cores = NULL) {
   formula <- Formula::as.Formula(formula)
 
@@ -34,11 +17,6 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   group <- model.frame(formula(formula, lhs = 0, rhs = 5), data)
   group_id <- names(group) # groups are define by this variable
   names(group) <- c("group")
-
-
-#  mm <- model.frame(as.Formula(formula(formula, lhs = 1, rhs = -5)), data)
- # mm <- cbind(mm, group)
-
 
   # drop too small groups ----------------------------------------
   data %<>%
@@ -65,7 +43,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   ffe <- formula(formula, lhs = 0, rhs = 4)
   fz <- formula(formula, lhs = 0, rhs = 3)
 
-  #dep_var <- str_sub(as.character(fdep), 1,  -5)
+  # dep_var <- str_sub(as.character(fdep), 1,  -5)
 
   # strsplit(as.character(ffe), " + ")
 
@@ -85,26 +63,22 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   if (dim(end)[2] > dim(z)[2] & method != "fe" & method != "ht") stop("fewer instruments than endogenous variables. If you wish to use interval instrument select method fe or ht")
   if (dim(end)[2] == 0 & dim(z)[2] > 0) stop("External instrument is specified, but there is no endogeous variable")
   if (min(tapply(y[, 1], group[, 1], var) > 0) == 0) stop("The dependent variable must vary within groups / individuals.")
+  if (dim(end)[2] == 0 & method == "fe") stop("FE is used, but no endogenous variable specified.")
 
 
   if (sum(cbind(z, group) %>% slice_rows("group") %>% dmap(var) %>% colSums() != 0) != 1) {
     stop("The instrument is not allowed to vary within groups.")
   }
-
-
   # --------------------------------------------------------------
-  # Matrix of regressors (notation as in the paper X: second stage, Xtilde: first stage)
-  # tv <- (cbind(exo, end, group) %>% slice_rows("group") %>% dmap(var) %>% colSums() != 0)[-1] # TRUE if time varying
-  tv <-(cbind(group, exo, end) %>% slice_rows("group") %>% summarise(across(everything(), funs(n_distinct)))  %>% colSums()/G != 1)[-1]
+  tv <- (cbind(group, exo, end) %>% slice_rows("group") %>% summarise(across(everything(), funs(n_distinct))) %>% colSums() / G != 1)[-1]
 
   time_varying <- data.frame(cbind(exo, end)[, tv])
-  time_varying_var <- c(names(cbind(exo,end))[tv == T])   # I don't like this two lines. I would like to take the names from tv (but they change)
-  time_constant_var <- c(names(cbind(exo,end))[tv == F])
+  time_varying_var <- c(names(cbind(exo, end))[tv == T]) # I don't like this two lines. I would like to take the names from tv (but they change)
+  time_constant_var <- c(names(cbind(exo, end))[tv == F])
 
   names(time_varying) <- time_varying_var
 
-  first <- cbind(y, time_varying, group)
-  first <- data # had to do it to allow for log() factor( ) variables
+  first <- data
   datalist <- NULL
   first$g <- round(first$group * 0.001) + 1
   gg <- max(first$g)
@@ -115,7 +89,6 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     datalist1 <- lapply(gr, function(gr) first1 %>% filter(group == gr))
     datalist <- c(datalist, datalist1)
   }
-
 
   # First stage ---------------------------------------------------------------------------------
   U <- quantiles
@@ -149,45 +122,35 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   colnames(fitted) <- mydep
   second <- bind_cols(data, fitted)
 
-  # pasted variables in strings:
-  exo_s <- paste(exo_var, collapse = "+")
-  inst_s <- paste(inst_var, collapse = "+")
-  endog_s <- paste(endog_var, collapse = "+")
-  fe_s <- paste(fe_var, collapse = "+")
 
+  if (fex == "~0") {
+    fex <- "~1"
+  }
   if (method == "fe") { # no second stage FE possible if you have  method = "fe"
     # generate internal instruments
     b <- cbind(group, end) %>%
       group_by(group) %>%
-      mutate(across(everything(), funs(. - mean(.)), .names = "{.col}_dem"))
+      transmute(across(everything(), funs(. - mean(.)), .names = "{.col}dem"))
 
-    inst_s <- paste0(paste(endog_var, collapse = "_dem +"), "_dem")
-    second <- bind_cols(b, exo, fitted)
+    inst_s <- paste0(paste(endog_var, collapse = "dem +"), "dem")
+    second <- bind_cols(b[, -1], data, fitted)
 
-    form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", "~", exo_s, "|", paste0(endog_s, "~", inst_s)))
+    form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), "~", inst_s))
     res <- feols(form, second, cluster = group)
   } else if (method == "ols") {
     if (length(fe) == 0) {
-      form <- as.Formula(paste(".[mydep]", exo_s, sep = "~"))
+      form <- as.Formula(paste0(".[mydep]", fex))
     } else {
-      form <- as.Formula(paste0(".[mydep]~", paste(exo_s, "|", fe_s)))
+      form <- as.Formula(paste0(".[mydep]", paste(fex, "|", str_sub(ffe, 2, -1))))
     }
     res <- feols(form, second, cluster = group)
   } else if (method == "2sls") {
     if (length(fe) == 0) {
-      # form <-  as.Formula(paste0(".[mydep]~", exo_s, "|", paste0(endog_s, "~", inst_s)))
-      form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", "~", exo_s, "|", paste0(endog_s, "~", inst_s)))
+      form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), fz))
     } else {
-      # form <- as.Formula(paste0(".[mydep]~", exo_s, "|" , paste(fe_s, collapse = "+"), "|",paste0(endog_s, "~", inst_s) ))
-      form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", "~", exo_s, "|", paste(fe_s, collapse = "+"), "|", paste0(endog_s, "~", inst_s)))
-      # form <-  as.Formula(paste0(paste(mydep, collapse = "|"), "~", exo_s, "|", paste(fe_s, collapse = "+"), "|", paste0("(",paste(endog_var, collapse = "|"), "~", inst_s, ")"), "|", group)) for felm()
+      form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(ffe, 2, -1), "|", str_sub(fen, 2, -1), fz))
     }
     res <- feols(form, second, cluster = group)
   }
   return(res)
-  # with instruments feols can't use multiple dependent variables. Thus I use felm()
 }
-mdqr(dep ~ x1 + x11 | x2 + x22 | z + z2 | fe + fe2 | ggroup, ddata, method = c("ols"), quantiles = c(.1, .5))
-
-
-formula <- as.Formula(dep ~ x1 + x11 | x2 + x22 | z + z2 | fe + fe2 | ggroup)
