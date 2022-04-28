@@ -67,6 +67,9 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   if (length(all.vars(fen)) == 0 & method == "fe") stop("FE is used, but no endogenous variable specified.")
   if (method == "ols" & length(all.vars(fen)) > 0) stop("OLS is used but there are endogenous variables.")
   if (method == "reoi" & length(all.vars(ffe)) > 0) stop("RE is uesd with fixed effects in the second stage.")
+  if (method == "ht" & length(all.vars(ffe)) > 0) stop("HT is uesd with fixed effects in the second stage.")
+  if (method == "regmm" & length(all.vars(ffe)) > 0) stop("RE is uesd with fixed effects in the second stage.")
+  if (method == "fe" & length(all.vars(ffe)) > 0) stop("The within estimator is uesd with fixed effects in the second stage.")
 
   if (sum(cbind(z, group) %>% slice_rows("group") %>% dmap(var) %>% colSums() != 0) != 1) {
     stop("The instrument is not allowed to vary within groups.")
