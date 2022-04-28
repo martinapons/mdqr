@@ -13,14 +13,20 @@ library(Matrix)
 quantile <- c(.1, .5)
 
 data <- d
-mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), cores = NULL) {
+mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), clustervar = NULL, cores = NULL, min = 1) {
+
   formula <- Formula::as.Formula(formula)
 
   myvar <- all.vars(formula)
-  data <- dplyr::select(data, tidyselect::all_of(myvar)) # eventually need to add cluster var.
+  data <- dplyr::select(data, tidyselect::all_of(myvar), tidyselect::all_of(clustervar) ) # eventually need to add cluster var.
   data %<>% as_tibble() %>% drop_na()
 
   group <- model.frame(formula(formula, lhs = 0, rhs = 5), data)
+  if (is.null(clustervar)){
+    clvar <- group
+  } else {
+    clvar <- dplyr::select(data, all_of(clustervar))
+  }
   group_id <- names(group) # groups are define by this variable
   names(group) <- c("group")
 
@@ -32,7 +38,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     ungroup()
 
   data <- data %>% add_count(group) # number of observations in each group.
-  data <- data %>% filter(n >= 2) # remove groups with less than 25 obs
+  data <- data %>% dplyr::filter(n >= min) # remove groups with less than n obs
 
   data %<>%
     as_tibble() %>%
@@ -133,21 +139,21 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     inst_s <- paste0(paste(endog_var, collapse = "dem +"), "dem")
     second <- bind_cols(b[, -1], data, fitted)
     form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), "~", inst_s))
-    res <- feols(form, second, cluster = group)
+    res <-  fixest::feols(form, second, cluster = clvar)
   } else if (method == "ols") {
     if (length(fe) == 0) {
       form <- as.Formula(paste0(".[mydep]", fex))
     } else {
       form <- as.Formula(paste0(".[mydep]", paste(fex, "|", str_sub(ffe, 2, -1))))
     }
-    res <- feols(form, second, cluster = group)
+    res <-  fixest::feols(form, second, cluster = clvar)
   } else if (method == "2sls") {
     if (length(fe) == 0) {
       form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), fz))
     } else {
       form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(ffe, 2, -1), "|", str_sub(fen, 2, -1), fz))
     }
-    res <- feols(form, second, cluster = group)
+    res <-  fixest::feols(form, second, cluster = clvar)
   } else if (method == "be") {
     b <- cbind(group, end) %>%
       group_by(group) %>%
@@ -155,7 +161,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     second <- bind_cols(b[, -1], data, fitted)
     inst_s <- paste0(paste(endog_var, collapse = "m +"), "m")
     form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), "~", inst_s))
-    res <- feols(form, second, cluster = group)
+    res <-  fixest::feols(form, second, cluster = clvar)
   } else if (method == "reoi") {
     lambda <- sapply(first, function(x) x[c("lambda_i")])
     xlist <- sapply(first, function(x) x[c("mm")])
@@ -181,7 +187,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
       Zstar <- as.matrix(Omegainv %*% model.matrix(fex, data))
       form2 <- as.Formula(paste0(form, "| Zstar-1 "))
       rr <- AER::ivreg(form2, data = second)
-      rr <- coeftest(rr, vcov = vcovCL, cluster = group)
+      rr <- coeftest(rr, vcov = vcovCL, cluster = clvar)
       res[[which(u == U)]] <- rr
     }
     names(res) <- mydep
@@ -191,7 +197,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
 
     for (u in U) {
       form <- as.Formula(paste0(paste0("fitted_", u), fex, "+", str_sub(fen, 2, -1)))
-      model <- momentModel(form, fz, data = second, vcov = "CL", vcovOptions = list(cluster = ~group))
+      model <- momentModel(form, fz, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
       rr <- summary(gmmFit(model, type = "twostep"))
       res[[which(u == U)]] <- rr
     }
@@ -216,7 +222,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
 
     for (u in U) {
       form <- as.Formula(paste0(paste0("fitted_", u), fex, "+", str_sub(fen, 2, -1)))
-      model <- momentModel(form, Z, data = second, vcov = "CL", vcovOptions = list(cluster = ~group))
+      model <- momentModel(form, Z, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
       r <- gmmFit(model, type = "twostep")
       rr <- summary(r, sandwich = TRUE, df.adj = FALSE) # whichone do we want? see 1.4.4 in https://cran.r-project.org/web/packages/momentfit/vignettes/gmmS4.pdf
       res[[which(u == U)]] <- rr
@@ -240,7 +246,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     second <- cbind(second, Z)
     inst_s <- paste0( "~" ,paste(names(Z), collapse = "+"))
     form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), inst_s))
-    res <- feols(form, second, cluster = group)
+    res <-  fixest::feols(form, second, cluster = clvar)
   }
   return(res)
 }
