@@ -4,7 +4,12 @@ library(stringr)
 library(Formula)
 library(formula.tools)
 library(swCRTdesign)
-
+library(MASS)
+library(emulator)
+library(dplyr)
+library(fixest)
+library(tidyverse)
+library(Matrix)
 quantile <- c(.1, .5)
 
 data <- d
@@ -12,7 +17,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   formula <- Formula::as.Formula(formula)
 
   myvar <- all.vars(formula)
-  data <- select(data, all_of(myvar)) # eventually need to add cluster var.
+  data <- dplyr::select(data, tidyselect::all_of(myvar)) # eventually need to add cluster var.
   data %<>% as_tibble() %>% drop_na()
 
   group <- model.frame(formula(formula, lhs = 0, rhs = 5), data)
@@ -61,7 +66,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   if (min(tapply(y[, 1], group[, 1], var) > 0) == 0) stop("The dependent variable must vary within groups / individuals.")
   if (length(all.vars(fen)) == 0 & method == "fe") stop("FE is used, but no endogenous variable specified.")
   if (method == "ols" & length(all.vars(fen)) > 0) stop("OLS is used but there are endogenous variables.")
-
+  if (method == "reoi" & length(all.vars(ffe)) > 0) stop("RE is uesd with fixed effects in the second stage.")
 
   if (sum(cbind(z, group) %>% slice_rows("group") %>% dmap(var) %>% colSums() != 0) != 1) {
     stop("The instrument is not allowed to vary within groups.")
@@ -86,7 +91,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     cores <- detectCores() - 1
   }
 
-  form1 <- formula(paste0(stringr::str_sub(as.character(fdep), 1, -5) , paste0(fex) , "+ " ,stringr::str_sub(as.character(fen), 2, -1) ))
+  form1 <- formula(paste0(stringr::str_sub(as.character(fdep), 1, -5), paste0(fex), "+ ", stringr::str_sub(as.character(fen), 2, -1)))
 
   cl <- makeCluster(cores) # Set the number of clusters
   RNGkind(kind = "L'Ecuyer-CMRG") # Set the seed for each cluster
@@ -100,7 +105,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     library(Formula)
     library(Matrix)
   })
-  first <- clusterApply(cl, datalist, md_first_stage, fdep, form1,  U)
+  first <- clusterApply(cl, datalist, md_first_stage, fdep, form1, U)
   stopCluster(cl)
 
   # Extract Fitted values: the fitted values are a list in a list. E
@@ -126,7 +131,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     second <- bind_cols(b[, -1], data, fitted)
     form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), "~", inst_s))
     res <- feols(form, second, cluster = group)
-  } else if (method == "ols" | method == "reoi") {
+  } else if (method == "ols") {
     if (length(fe) == 0) {
       form <- as.Formula(paste0(".[mydep]", fex))
     } else {
@@ -140,7 +145,7 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
       form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(ffe, 2, -1), "|", str_sub(fen, 2, -1), fz))
     }
     res <- feols(form, second, cluster = group)
-  } else   if (method == "be"){
+  } else if (method == "be") {
     b <- cbind(group, end) %>%
       group_by(group) %>%
       transmute(across(everything(), funs(mean(.)), .names = "{.col}m"))
@@ -148,30 +153,91 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     inst_s <- paste0(paste(endog_var, collapse = "m +"), "m")
     form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), "~", inst_s))
     res <- feols(form, second, cluster = group)
-  }
-
-  if (method == "reoi"){
+  } else if (method == "reoi") {
     lambda <- sapply(first, function(x) x[c("lambda_i")])
-
-
     xlist <- sapply(first, function(x) x[c("mm")])
     Xtilde <- bdiag(xlist)
+    res <- list()
+    for (u in U) {
+      Lambda <- lapply(lambda, function(x) x[, , which(u == U)])
+      # this chunk of code comes from https://github.com/cran/plm/blob/master/R/tool_ercomp.R. This uses Nerlove method and
+      # with OLS using the fitted values lead to the same estiamted sigma_alpha.
 
+      form <- as.Formula(paste0(paste0("fitted_", u), fex))
+      est <- plm::plm(form, data = second, index = c("group"), model = "within")
+      pdim <- plm::pdim(est)
+      N <- pdim$nT$n
 
-    # for all U
-    Lambda <- bdiag(lapply(lambda, function(x) x[, , which(u == U)]))
-    lambda <- lapply(first, function(x) x[c("lambda_i")])
-    XVX <- Matrix::tcrossprod(Xtilde %*% Lambda , Xtilde)
+      s2alpha <- sum((plm::fixef(est, type = "dmean", effect = "individual"))^2 *
+        pdim$Tint$Ti / pdim$nT$N) * (pdim$nT$n / (pdim$nT$n - 1))
 
-
-    residuals <- res[which(u ==U)][[1]]$residuals
-    sig <- 0
-    for (i in 1:G){ #### HERE HELP ME  NEED TO COMPUTE SIGMA! TRY TO COMPY MAYBE PLM() PACKAGE!
-      for (t in 1:data$n){
-        sig <- sig + sum(pooled$residuals[(i*T-T + t)]*pooled$residuals[((i*T-T + (t+1)):(i*T-T +T)  )])
-      }
+      xlx <- Map(quad.tform, Lambda, xlist)
+      omega <- Map("+", xlx, s2alpha)
+      omegainv <- lapply(omega, ginv)
+      Omegainv <- Matrix::bdiag(omegainv)
+      Zstar <- as.matrix(Omegainv %*% model.matrix(fex, data))
+      form2 <- as.Formula(paste0(form, "| Zstar-1 "))
+      rr <- AER::ivreg(form2, data = second)
+      rr <- coeftest(rr, vcov = vcovCL, cluster = group)
+      res[[which(u == U)]] <- rr
     }
+    names(res) <- mydep
+  } else if (method == "gmm") {
+    # https://cran.r-project.org/web/packages/momentfit/vignettes/gmmS4.pdf
+    res <- list()
 
+    for (u in U) {
+      form <- as.Formula(paste0(paste0("fitted_", u), fex, "+", str_sub(fen, 2, -1)))
+      model <- momentModel(form, fz, data = second, vcov = "CL", vcovOptions = list(cluster = ~group))
+      rr <- summary(gmmFit(model, type = "twostep"))
+      res[[which(u == U)]] <- rr
+    }
+    names(res) <- mydep
+  } else if (method == "regmm") {
+    me <- cbind(group, exo) %>%
+      group_by(group) %>%
+      transmute(across(everything(), funs(mean(.)), .names = "{.col}m"))
+
+    dm <- cbind(group, exo) %>%
+      group_by(group) %>%
+      transmute(across(everything(), funs(. - mean(.)), .names = "{.col}dem"))
+
+    me <- me[, -1]
+    de <- dm[, -1]
+
+    # drop zero in demeaned
+    tv <- (colSums((abs(de) == 0)) == 0)
+    de <- de[tv]
+
+    Z <- cbind(de, me)
+
+    for (u in U) {
+      form <- as.Formula(paste0(paste0("fitted_", u), fex, "+", str_sub(fen, 2, -1)))
+      model <- momentModel(form, Z, data = second, vcov = "CL", vcovOptions = list(cluster = ~group))
+      r <- gmmFit(model, type = "twostep")
+      rr <- summary(r, sandwich = TRUE, df.adj = FALSE) # whichone do we want? see 1.4.4 in https://cran.r-project.org/web/packages/momentfit/vignettes/gmmS4.pdf
+      res[[which(u == U)]] <- rr
+    }
+    names(res) <- mydep
+  } else if (method == "ht") {
+    me <- cbind(group, exo) %>%
+      group_by(group) %>%
+      transmute(across(everything(), funs(mean(.)), .names = "{.col}m"))
+
+    dm <- cbind(group, exo, end) %>%
+      group_by(group) %>%
+      transmute(across(everything(), funs(. - mean(.)), .names = "{.col}dem"))
+    me <- me[, -1]
+    de <- dm[, -1]
+
+    # drop zero in demeaned
+    tv <- (colSums((abs(de) == 0)) == 0)
+    de <- de[tv]
+    Z <- cbind(de, me)
+    second <- cbind(second, Z)
+    inst_s <- paste0( "~" ,paste(names(Z), collapse = "+"))
+    form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), inst_s))
+    res <- feols(form, second, cluster = group)
   }
   return(res)
 }
