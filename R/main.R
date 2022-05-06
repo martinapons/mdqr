@@ -1,50 +1,78 @@
-library(purrrlyr)
 library(parallel)
 library(stringr)
 library(Formula)
-library(formula.tools)
-library(swCRTdesign)
 library(MASS)
 library(emulator)
 library(dplyr)
 library(fixest)
-library(tidyverse)
+library(tidyselect)
+library(tidyr)
 library(Matrix)
+library(formula.tools)
 quantile <- c(.1, .5)
 
 data <- d
-mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), clustervar = NULL, cores = NULL, min = 1) {
 
+#' Run minimum distance regression.
+#' @export
+#'
+#' @param formula An object of class \code{\link[Formula]{Formula}}. The formula consists of five parts. \code{y ~ exo_1 + exo_2 | endo_1 + endo_2 | z_1 + z_2 | fe_1 + fe_2 | group_ID }. Note that all part of the formula have to be specified. Use \code{0} to leave it unspecified, e.g.\code{y ~ exo_1 + exo_2 | 0 | 0 | fe_1 + fe_2 | group_ID }. Only second stage fixed effects should be included in the formula. If you wish to estimate a within model you don't need to include fixed effects (see 'details').
+#' @param data 	A data.frame containing the necessary variables to run the model.
+#' @param method A string
+#' @param quantiles A vector with the quantiles of interest.
+#' @param clustervar A string with the name of the cluster variable. If \code{clustervar = NULL} (default), group indicator is used as a cluster variable.
+#' @param cores Number of cores to use for first stage computation. if \code{core = NULL} the number of cores is set to \code{\link[parallel]{detectCores}-1}
+#' @param n_small A positive integer indicating the minimum size of groups allowed.
+#' @return A list containing regression results for each quantile. Groups stricly smaller than \code{n_small} are dropped from the sample.
+#' @section Details
+#'
+#'
+
+mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), clustervar = NULL, cores = NULL, n_small = 1) {
+  start <- Sys.time()
   formula <- Formula::as.Formula(formula)
 
   myvar <- all.vars(formula)
-  data <- dplyr::select(data, tidyselect::all_of(myvar), tidyselect::all_of(clustervar) ) # eventually need to add cluster var.
-  data %<>% as_tibble() %>% drop_na()
+    data <- dplyr::select(data, tidyselect::all_of(myvar), tidyselect::all_of(clustervar) ) # eventually need to add cluster var.
 
-  group <- model.frame(formula(formula, lhs = 0, rhs = 5), data)
+  data %<>% dplyr::as_tibble() %>% tidyr::drop_na()
+
+  group <- stats::model.frame(formula(formula, lhs = 0, rhs = 5), data)
   if (is.null(clustervar)){
     clvar <- group
   } else {
-    clvar <- dplyr::select(data, all_of(clustervar))
+    clvar <- dplyr::select(data, tidyselect::all_of(clustervar))
   }
   group_id <- names(group) # groups are define by this variable
+
   names(group) <- c("group")
 
+
   # drop too small groups ----------------------------------------
-  data %<>%
-    as_tibble() %>%
-    group_by_at(vars(group)) %>%
-    mutate(group = cur_group_id()) %>%
-    ungroup()
 
-  data <- data %>% add_count(group) # number of observations in each group.
-  data <- data %>% dplyr::filter(n >= min) # remove groups with less than n obs
+  if  (group_id != "group") {
+    if (sum(names(data) == "group") == 0 ) {
+      data <- dplyr::bind_cols(data, group)
+    } else {
+      stop("One variable is named group. Change his name.")
+    }
+    data <- dplyr::select(data, -(group_id))
+  }
 
   data %<>%
-    as_tibble() %>%
-    group_by_at(vars(group)) %>%
-    mutate(group = cur_group_id()) %>%
-    ungroup()
+    dplyr::as_tibble() %>%
+    dplyr::group_by_at(dplyr::vars(group)) %>%  # Need to change this line! End of life cycle
+    dplyr::mutate(group = dplyr::cur_group_id()) %>%
+    dplyr::ungroup()
+
+  data <- data %>% dplyr::add_count(group) # number of observations in each group.
+  data <- data %>% dplyr::filter(n >= n_small) # remove groups with less than n obs
+
+  data %<>%
+    dplyr::as_tibble() %>%
+    dplyr::group_by_at(dplyr::vars(group)) %>%
+    dplyr::mutate(group = dplyr::cur_group_id()) %>%
+    dplyr::ungroup()
 
   G <- max(data$group)
   # ------------------------------------------------------------
@@ -55,11 +83,11 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   ffe <- formula(formula, lhs = 0, rhs = 4)
   fz <- formula(formula, lhs = 0, rhs = 3)
 
-  y <- model.frame(fdep, data) # some of these are not needed
-  end <- model.frame(fen, data)
-  z <- model.frame(fz, data)
-  fe <- model.frame(ffe, data)
-  exo <- model.frame(fex, data)
+  y <- stats::model.frame(fdep, data) # some of these are not needed
+  end <- stats::model.frame(fen, data)
+  z <- stats::model.frame(fz, data)
+  fe <- stats::model.frame(ffe, data)
+  exo <- stats::model.frame(fex, data)
 
   # -----------------
 
@@ -67,21 +95,24 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   exo_var <- names(exo)
 
 
-  if (length(all.vars(fen)) > length(all.vars(fen)) & method != "fe" & method != "ht") stop("fewer instruments than endogenous variables. If you wish to use interval instrument select method fe or ht")
+  if (length(all.vars(fen)) > length(all.vars(fen)) & method != "within" & method != "ht") stop("fewer instruments than endogenous variables. If you wish to use interval instrument select method fe or ht")
   if (length(all.vars(fen)) == 0 & length(all.vars(fen)) > 0) stop("External instrument is specified, but there is no endogeous variable")
-  if (min(tapply(y[, 1], group[, 1], var) > 0) == 0) stop("The dependent variable must vary within groups / individuals.")
-  if (length(all.vars(fen)) == 0 & method == "fe") stop("FE is used, but no endogenous variable specified.")
+ # if (min(tapply(y[, 1], group[, 1], var) > 0) == 0) stop("The dependent variable must vary within groups / individuals.")
+  if (length(all.vars(fen)) == 0 & method == "within") stop("The within estimator is used, but no endogenous variable specified.")
   if (method == "ols" & length(all.vars(fen)) > 0) stop("OLS is used but there are endogenous variables.")
   if (method == "reoi" & length(all.vars(ffe)) > 0) stop("RE is uesd with fixed effects in the second stage.")
   if (method == "ht" & length(all.vars(ffe)) > 0) stop("HT is uesd with fixed effects in the second stage.")
   if (method == "regmm" & length(all.vars(ffe)) > 0) stop("RE is uesd with fixed effects in the second stage.")
-  if (method == "fe" & length(all.vars(ffe)) > 0) stop("The within estimator is uesd with fixed effects in the second stage.")
+  if (method == "within" & length(all.vars(ffe)) > 0) stop("The within estimator is uesd with fixed effects in the second stage.")
 
-  if (sum(cbind(z, group) %>% slice_rows("group") %>% dmap(var) %>% colSums() != 0) != 1) {
-    stop("The instrument is not allowed to vary within groups.")
+  if (length(all.vars(fz)) > 0){
+    if (sum(tapply(z[[1]], group, stats::var) != 0) != 0 )  stop("The instrument is not allowed to vary within groups.")
   }
-  # --------------------------------------------------------------
 
+  # --------------------------------------------------------------
+  print(start - Sys.time())
+
+  print("Make datalist...")
 
   first <- data
   datalist <- NULL
@@ -89,127 +120,127 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
   gg <- max(first$g)
 
   for (i in 1:gg) {
-    first1 <- first %>% filter(g == i)
+    first1 <- first %>% dplyr::filter(g == i)
     gr <- c(min(first1$group):max(first1$group))
-    datalist1 <- lapply(gr, function(gr) first1 %>% filter(group == gr))
+    datalist1 <- lapply(gr, function(gr) first1 %>% dplyr::filter(group == gr))
     datalist <- c(datalist, datalist1)
   }
 
   # First stage ---------------------------------------------------------------------------------
+  print(start - Sys.time())
+
+  print("First stage estimation starting...")
   if (is.null(cores) == 1) {
-    cores <- detectCores() - 1
+    cores <- parallel::detectCores() - 1
   }
 
-  form1 <- formula(paste0(stringr::str_sub(as.character(fdep), 1, -5), paste0(fex), "+ ", stringr::str_sub(as.character(fen), 2, -1)))
+  # form1 <- formula(paste0(stringr::str_sub(as.character(fdep), 1, -5), paste0(fex), "+ ", stringr::str_sub(as.character(fen), 2, -1)))
+  form1 <- formula(paste0(as.character(fdep)[2], "~", as.character(fex)[2], "+ ", (as.character(fen)[2])))
 
-  cl <- makeCluster(cores) # Set the number of clusters
-  RNGkind(kind = "L'Ecuyer-CMRG") # Set the seed for each cluster
-  clusterExport(cl, c("fdep", "md_first_stage", "datalist", "form1", "U")) # Functions needed
-  clusterEvalQ(cl, {
+  cl <- parallel::makeCluster(cores) # Set the number of clusters
+  parallel::clusterExport(cl, c("fdep", "md_first_stage", "form1", "quantiles"), envir=environment()) # Functions needed
+  parallel::clusterEvalQ(cl, {
     library(quantreg)
-    library(sandwich)
-    library(dtplyr)
-    library(pracma)
-    library(stringr)
-    library(Formula)
-    library(Matrix)
   })
-  first <- clusterApply(cl, datalist, md_first_stage, fdep, form1, U)
-  stopCluster(cl)
+  first <- parallel::clusterApply(cl, datalist, md_first_stage, fdep, form1, quantiles)
+  parallel::stopCluster(cl)
 
   # Extract Fitted values: the fitted values are a list in a list. E
   fitted <- lapply(first, function(x) x[c("fitted")])
   fitted <- lapply(fitted, data.frame, stringsAsFactors = FALSE)
-  fitted <- dplyr::bind_rows(fitted) # make a matrix with the fitted value of the frist stage
+  fitted <- dplyr::bind_rows(fitted)
   # -------------------
 
 
-  mydep <- paste("fitted", U, sep = "_")
+  mydep <- paste("fitted", quantiles, sep = "_")
   colnames(fitted) <- mydep
-  second <- bind_cols(data, fitted)
+  second <- dplyr::bind_cols(data, fitted)
+  print(start - Sys.time())
+
+  print("Second stage estimation starting...")
 
 
   if (fex == "~0") {
     fex <- "~1"
   }
-  if (method == "fe") { # no second stage FE possible if you have  method = "fe"
+  if (method == "within") { # no second stage FE possible if you have  method = "within"
     b <- cbind(group, end) %>%
-      group_by(group) %>%
-      transmute(across(everything(), funs(. - mean(.)), .names = "{.col}dem"))
+      dplyr::group_by(group) %>%
+      dplyr::transmute(dplyr::across(tidyselect::everything(),  list(tdm = ~ . - mean(.)) , .names = "{.col}dem" ))
     inst_s <- paste0(paste(endog_var, collapse = "dem +"), "dem")
-    second <- bind_cols(b[, -1], data, fitted)
-    form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), "~", inst_s))
+    second <- dplyr::bind_cols(b[, -1], data, fitted)
+    form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(fen, 2, -1), "~", inst_s))
     res <-  fixest::feols(form, second, cluster = clvar)
   } else if (method == "ols") {
     if (length(fe) == 0) {
-      form <- as.Formula(paste0(".[mydep]", fex))
+      form <- Formula::as.Formula(paste0(".[mydep]", fex))
     } else {
-      form <- as.Formula(paste0(".[mydep]", paste(fex, "|", str_sub(ffe, 2, -1))))
+      form <- Formula::as.Formula(paste0(".[mydep]", paste(fex, "|", stringr::str_sub(ffe, 2, -1))))
     }
     res <-  fixest::feols(form, second, cluster = clvar)
   } else if (method == "2sls") {
     if (length(fe) == 0) {
-      form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), fz))
+      form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(fen), 2, -1), fz))
     } else {
-      form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(ffe, 2, -1), "|", str_sub(fen, 2, -1), fz))
+      form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(ffe, 2, -1), "|", stringr::str_sub(tchar(fen), 2, -1), fz))
     }
     res <-  fixest::feols(form, second, cluster = clvar)
   } else if (method == "be") {
     b <- cbind(group, end) %>%
-      group_by(group) %>%
-      transmute(across(everything(), funs(mean(.)), .names = "{.col}m"))
-    second <- bind_cols(b[, -1], data, fitted)
+      dplyr::group_by(group) %>%
+      dplyr::transmute(dplyr::across(tidyselect::everything(),  list(tdm = ~ mean(.)) , .names = "{.col}m" ))
+    second <- dplyr::bind_cols(b[, -1], data, fitted)
     inst_s <- paste0(paste(endog_var, collapse = "m +"), "m")
-    form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), "~", inst_s))
+    form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(fen, 2, -1), "~", inst_s))
     res <-  fixest::feols(form, second, cluster = clvar)
   } else if (method == "reoi") {
     lambda <- sapply(first, function(x) x[c("lambda_i")])
     xlist <- sapply(first, function(x) x[c("mm")])
-    Xtilde <- bdiag(xlist)
+    Xtilde <- Matrix::bdiag(xlist)
     res <- list()
-    for (u in U) {
-      Lambda <- lapply(lambda, function(x) x[, , which(u == U)])
+    for (u in quantiles) {
+      Lambda <- lapply(lambda, function(x) x[, , which(u == quantiles)])
       # this chunk of code comes from https://github.com/cran/plm/blob/master/R/tool_ercomp.R. This uses Nerlove method and
       # with OLS using the fitted values lead to the same estiamted sigma_alpha.
 
-      form <- as.Formula(paste0(paste0("fitted_", u), fex))
-      est <- plm::plm(form, data = second, index = c("group"), model = "within")
+      form <- Formula::as.Formula(paste0(paste0("fitted_", u), fex))
+      est <- plm::plm(form, data = data.frame(second), index = c("group"), model = "within")
       pdim <- plm::pdim(est)
       N <- pdim$nT$n
 
       s2alpha <- sum((plm::fixef(est, type = "dmean", effect = "individual"))^2 *
         pdim$Tint$Ti / pdim$nT$N) * (pdim$nT$n / (pdim$nT$n - 1))
 
-      xlx <- Map(quad.tform, Lambda, xlist)
+      xlx <- Map(emulator::quad.tform, Lambda, xlist)
       omega <- Map("+", xlx, s2alpha)
-      omegainv <- lapply(omega, ginv)
+      omegainv <- lapply(omega, MASS::ginv)
       Omegainv <- Matrix::bdiag(omegainv)
-      Zstar <- as.matrix(Omegainv %*% model.matrix(fex, data))
-      form2 <- as.Formula(paste0(form, "| Zstar-1 "))
+      Zstar <- as.matrix(Omegainv %*% stats::model.matrix(fex, data))
+      form2 <- Formula::as.Formula(paste0(form, "| Zstar-1 "))
       rr <- AER::ivreg(form2, data = second)
-      rr <- coeftest(rr, vcov = vcovCL, cluster = clvar)
-      res[[which(u == U)]] <- rr
+      rr <- lmtest::coeftest(rr, vcov = sandwich::vcovCL, cluster = clvar)
+      res[[which(u == quantiles)]] <- rr
     }
     names(res) <- mydep
   } else if (method == "gmm") {
     # https://cran.r-project.org/web/packages/momentfit/vignettes/gmmS4.pdf
     res <- list()
 
-    for (u in U) {
-      form <- as.Formula(paste0(paste0("fitted_", u), fex, "+", str_sub(fen, 2, -1)))
-      model <- momentModel(form, fz, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
-      rr <- summary(gmmFit(model, type = "twostep"))
-      res[[which(u == U)]] <- rr
+    for (u in quantiles) {
+      form <- Formula::as.Formula(paste0(paste0("fitted_", u), fex, "+", stringr::str_sub(fen, 2, -1)))
+      model <- momentfit::momentModel(form, fz, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
+      rr <- summary(momentfit::gmmFit(model, type = "twostep"))
+      res[[which(u == quantiles)]] <- rr
     }
     names(res) <- mydep
   } else if (method == "regmm") {
     me <- cbind(group, exo) %>%
-      group_by(group) %>%
-      transmute(across(everything(), funs(mean(.)), .names = "{.col}m"))
+      dplyr::group_by(group) %>%
+      dplyr::transmute(dplyr::across(tidyselect::everything(),  list(tdm = ~ mean(.)) , .names = "{.col}m" ))
 
     dm <- cbind(group, exo) %>%
-      group_by(group) %>%
-      transmute(across(everything(), funs(. - mean(.)), .names = "{.col}dem"))
+      dplyr::group_by(group) %>%
+      dplyr::transmute(dplyr::across(tidyselect::everything(),  list(tdm = ~ . - mean(.)) , .names = "{.col}dem" ))
 
     me <- me[, -1]
     de <- dm[, -1]
@@ -220,22 +251,22 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
 
     Z <- cbind(de, me)
 
-    for (u in U) {
-      form <- as.Formula(paste0(paste0("fitted_", u), fex, "+", str_sub(fen, 2, -1)))
-      model <- momentModel(form, Z, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
-      r <- gmmFit(model, type = "twostep")
+    for (u in quantiles) {
+      form <- Formula::as.Formula(paste0(paste0("fitted_", u), fex, "+", stringr::str_sub(fen, 2, -1)))
+      model <- momentfit::momentModel(form, Z, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
+      r <- momentfit::gmmFit(model, type = "twostep")
       rr <- summary(r, sandwich = TRUE, df.adj = FALSE) # whichone do we want? see 1.4.4 in https://cran.r-project.org/web/packages/momentfit/vignettes/gmmS4.pdf
-      res[[which(u == U)]] <- rr
+      res[[which(u == quantiles)]] <- rr
     }
     names(res) <- mydep
   } else if (method == "ht") {
     me <- cbind(group, exo) %>%
-      group_by(group) %>%
-      transmute(across(everything(), funs(mean(.)), .names = "{.col}m"))
+      dplyr::group_by(group) %>%
+      dplyr::transmute(dplyr::across(tidyselect::everything(),  list(tdm = ~  mean(.)) , .names = "{.col}m" ))
 
     dm <- cbind(group, exo, end) %>%
-      group_by(group) %>%
-      transmute(across(everything(), funs(. - mean(.)), .names = "{.col}dem"))
+      dplyr::group_by(group) %>%
+      dplyr::transmute(dplyr::across(tidyselect::everything(),  list(tdm = ~ . - mean(.)) , .names = "{.col}dem" ))
     me <- me[, -1]
     de <- dm[, -1]
 
@@ -245,8 +276,9 @@ mdqr <- function(formula, data, method = c("fe", "be", "reoi", "regmm", "ols", "
     Z <- cbind(de, me)
     second <- cbind(second, Z)
     inst_s <- paste0( "~" ,paste(names(Z), collapse = "+"))
-    form <- as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", str_sub(fen, 2, -1), inst_s))
+    form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(fen, 2, -1), inst_s))
     res <-  fixest::feols(form, second, cluster = clvar)
   }
   return(res)
 }
+
