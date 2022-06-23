@@ -22,9 +22,9 @@ Imports:
     tidyselect,
     quantreg,
     sandwich,
-    formula.tools,
     AER,
     tidyr,
     plm,
-    momentfit
+    momentfit,
+    ggplot2
 RoxygenNote: 7.1.2

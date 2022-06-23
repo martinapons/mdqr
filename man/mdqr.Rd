@@ -11,7 +11,9 @@ mdqr(
   quantiles = seq(0.1, 0.9, 0.1),
   clustervar = NULL,
   cores = NULL,
-  n_small = 1
+  n_small = 1,
+  run_second = TRUE,
+  fitted_values = NULL
 )
 }
 \arguments{
@@ -27,10 +29,14 @@ mdqr(
 
 \item{cores}{Number of cores to use for first stage computation. if \code{core = NULL} the number of cores is set to \code{\link[parallel]{detectCores}-1}}
 
-\item{n_small}{A positive integer indicating the minimum size of groups allowed.}
+\item{n_small}{A positive integer indicating the minimum size of groups allowed. Groups stricly smaller than \code{n_small} are dropped from the sample.}
+
+\item{run_second}{A logical evaluating to \code{TRUE} or \code{FALSE} indicating whether the second stage should be performed.}
+
+\item{fitted_values}{A matrix containing the first stage fitted values. To use only if the function \code{mdqr} has been already run and only the second stage is different. For example, to change the clustering of the errors or to change the set of second stage fixed effects.}
 }
 \value{
-A list containing regression results for each quantile. Groups stricly smaller than \code{n_small} are dropped from the sample.
+A list of two elements. The first element contains regression results for each quantile. The second element contain the matrix of fitted values from the first stage.
 }
 \description{
 Run minimum distance regression.
