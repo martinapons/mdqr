@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{mdqr}
 \alias{mdqr}
-\title{Run minimum distance regression.}
+\title{Run minimum distance quantile regression.}
 \usage{
 mdqr(
   formula,
@@ -17,31 +17,88 @@ mdqr(
 )
 }
 \arguments{
-\item{formula}{An object of class \code{\link[Formula]{Formula}}. The formula consists of five parts. \code{y ~ exo_1 + exo_2 | endo_1 + endo_2 | z_1 + z_2 | fe_1 + fe_2 | group_ID }. Note that all part of the formula have to be specified. Use \code{0} to leave it unspecified, e.g.\code{y ~ exo_1 + exo_2 | 0 | 0 | fe_1 + fe_2 | group_ID }. Only second stage fixed effects should be included in the formula. If you wish to estimate a within model you don't need to include fixed effects (see 'details').}
+\item{formula}{An object of class \code{\link[Formula]{Formula}}. The formula consists of five parts.
+\code{y ~ exo_1 + exo_2 | endo_1 + endo_2 | inst_1 + inst_2 | fe_1 + fe_2 | group_ID}.
+Note that all part of the formula have to be specified. Use \code{0} to leave
+it unspecified, e.g.\code{y ~ exo_1 + exo_2 | 0 | 0 | fe_1 + fe_2 | group_ID }.
+Only second stage fixed effects should be included in the formula. If you wish to
+estimate a within model you don't need to include fixed effects (see 'details').}
 
 \item{data}{A data.frame containing the necessary variables to run the model.}
 
-\item{method}{A character scalar indicates which method should be used in the second stage. The second stage estimators can use only the within variation (i.e. using an individual fixed effects approach) "within", the between variation "between". "reoi", and "regmm" perform random effects estimation implemented with the optimal instrument and efficient GMM, respectively. "ols" performs a least-squares second stage of the fitted values on X. "reoi" and "regmm" perform a second stage regression of the fitted values on X using an instrument vector Z. For "gmm", the efficient weighting matrix is used. Second stage fixed effect might be included with "ols", "2sls", and "gmm".}
+\item{method}{A character scalar indicates which method should be used in the second stage.
+The second stage estimators can use only the within variation (i.e. using an individual
+fixed effects approach) with the option "within", or the between variation with the option \code{"between"}.
+The options \code{"reoi"}, and \code{"regmm"} perform random effects estimation implemented with the optimal
+instrument and efficient GMM, respectively. \code{"ols"} performs a least-squares second stage of the
+fitted values on X. For \code{"gmm"}, the efficient weighting matrix is used. Second stage fixed effect
+might be included with \code{"ols"}, \code{"2sls"}, and \code{"gmm"}.}
 
 \item{quantiles}{A vector with the quantiles of interest. The default is 0.1, 0.2, ... , 0.9.}
 
-\item{clustervar}{A string with the name of the cluster variable. If \code{clustervar = NULL} (default), group indicator is used as a cluster variable.}
+\item{clustervar}{A string with the name of the cluster variable. If \code{clustervar = NULL} (default),
+group indicator is used as a cluster variable.}
 
-\item{cores}{Number of cores to use for first stage computation. if \code{core = NULL} the number of cores is set to \code{\link[parallel]{detectCores}-1}}
+\item{cores}{Number of cores to use for first stage computation. if \code{core = NULL} the number of cores
+is set to \code{\link[parallel]{detectCores}-1}.}
 
-\item{n_small}{A positive integer indicating the minimum size of groups allowed. Groups strictly smaller than \code{n_small} are dropped from the sample.}
+\item{n_small}{A positive integer indicating the minimum size of groups allowed.
+Groups strictly smaller than \code{n_small} are dropped from the sample.}
 
-\item{run_second}{A logical evaluating to \code{TRUE} or \code{FALSE} indicating whether the second stage should be performed.}
+\item{run_second}{A logical evaluating to \code{TRUE} or \code{FALSE} indicating
+whether the second stage should be performed.}
 
-\item{fitted_values}{A matrix containing the first stage fitted values. To use only if the function \code{mdqr} has been already run and only the second stage is different. For example, to change the clustering of the errors or to change the set of second stage fixed effects.}
+\item{fitted_values}{A matrix containing the first stage fitted values.
+To use only if the function \code{mdqr} has been already run and only the second stage is different.
+For example, to change the clustering of the errors or to change the set of second-stage fixed effects.}
 }
 \value{
-A list of three elements. The first element contains regression results for each quantile. The second element contains the matrix of fitted values from the first stage. The third element is the vector of quantiles.
+A list of four elements. The first element contains regression results for each quantile. The second element contains the matrix of fitted values from the first stage. The third element is the vector of quantiles.
+see https://github.com/lrberge/fixest/blob/HEAD/R/ESTIMATION_FUNS.R for inspiration
 }
 \description{
-Run minimum distance regression.
+Run minimum distance quantile regression.
 }
-\section{Details}{
-NA
+\section{Time-varying and time-constant variables / Individual-level and Group-level variables}{
+The formula automatically selects the regressors that have to be included in the first stage. If an endogenous variable is specified, either the within estimator is used or second-stage fixed effects have to be specified.
 }
 
+\section{Implementing the different estimators}{
+\subsection{Within Regression:}{
+
+Estimate the effect of union status on wage using a fixed effects regression.
+
+\code{mdqr(wage ~ union | 0 | 0 | 0 | group_ID, data, method = c("within"))}
+
+or
+
+#' \code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("within"))}
+}
+
+\subsection{Random Effects Regression}{
+
+\code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("reoi"))}
+
+\code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data,  method = c("regmm"))}
+}
+
+\subsection{Instrumental Variables}{
+
+Assume we want to estimate the effect of school budget (x) students' outcomes (y), where schools define the groups. Assume that an instrument z is available.
+
+\code{mdqr(y ~ 0 | x | z | 0 | group_ID, data, method = c("2sls"))}
+
+Covariates and or say county fixed effects can be included as follows:
+
+\code{mdqr(y ~ w | x | z | county | group_ID, data, method = c("2sls"))}
+
+If the model is overidentified "gmm" can be used instead.
+}
+}
+
+\references{
+\href{https://martinapons.github.io/files/MD.pdf}{Melly Blaise, Pons Martina (2022): "Minimum Distance Estimation of Quantile Panel Data Models"}.
+}
+\author{
+Martina Pons
+}

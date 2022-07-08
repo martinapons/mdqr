@@ -8,55 +8,79 @@ library(fixest)
 library(tidyselect)
 library(tidyr)
 library(Matrix)
-quantile <- c(.1, .5)
 
-data <- d
 
-#' Run minimum distance regression.
+#' Run minimum distance quantile regression.
 #' @export
 #'
-#' @param formula An object of class \code{\link[Formula]{Formula}}. The formula consists of five parts. \code{y ~ exo_1 + exo_2 | endo_1 + endo_2 | z_1 + z_2 | fe_1 + fe_2 | group_ID }. Note that all part of the formula have to be specified. Use \code{0} to leave it unspecified, e.g.\code{y ~ exo_1 + exo_2 | 0 | 0 | fe_1 + fe_2 | group_ID }. Only second stage fixed effects should be included in the formula. If you wish to estimate a within model you don't need to include fixed effects (see 'details').
+#' @param formula An object of class \code{\link[Formula]{Formula}}. The formula consists of five parts.
+#' \code{y ~ exo_1 + exo_2 | endo_1 + endo_2 | inst_1 + inst_2 | fe_1 + fe_2 | group_ID}.
+#' Note that all part of the formula have to be specified. Use \code{0} to leave
+#' it unspecified, e.g.\code{y ~ exo_1 + exo_2 | 0 | 0 | fe_1 + fe_2 | group_ID }.
+#' Only second stage fixed effects should be included in the formula. If you wish to
+#'  estimate a within model you don't need to include fixed effects (see 'details').
 #' @param data 	A data.frame containing the necessary variables to run the model.
-#' @param method A character scalar indicates which method should be used in the second stage. The second stage estimators can use only the within variation (i.e. using an individual fixed effects approach) "within", the between variation "between". "reoi", and "regmm" perform random effects estimation implemented with the optimal instrument and efficient GMM, respectively. "ols" performs a least-squares second stage of the fitted values on X. "reoi" and "regmm" perform a second stage regression of the fitted values on X using an instrument vector Z. For "gmm", the efficient weighting matrix is used. Second stage fixed effect might be included with "ols", "2sls", and "gmm".
+#' @param method A character scalar indicates which method should be used in the second stage.
+#'  The second stage estimators can use only the within variation (i.e. using an individual
+#'   fixed effects approach) with the option "within", or the between variation with the option \code{"between"}.
+#'    The options \code{"reoi"}, and \code{"regmm"} perform random effects estimation implemented with the optimal
+#'     instrument and efficient GMM, respectively. \code{"ols"} performs a least-squares second stage of the
+#'      fitted values on X. For \code{"gmm"}, the efficient weighting matrix is used. Second stage fixed effect
+#'       might be included with \code{"ols"}, \code{"2sls"}, and \code{"gmm"}.
 #' @param quantiles A vector with the quantiles of interest. The default is 0.1, 0.2, ... , 0.9.
-#' @param clustervar A string with the name of the cluster variable. If \code{clustervar = NULL} (default), group indicator is used as a cluster variable.
-#' @param cores Number of cores to use for first stage computation. if \code{core = NULL} the number of cores is set to \code{\link[parallel]{detectCores}-1}.
-#' @param n_small A positive integer indicating the minimum size of groups allowed. Groups strictly smaller than \code{n_small} are dropped from the sample.
-#' @param run_second A logical evaluating to \code{TRUE} or \code{FALSE} indicating whether the second stage should be performed.
-#' @param fitted_values A matrix containing the first stage fitted values. To use only if the function \code{mdqr} has been already run and only the second stage is different. For example, to change the clustering of the errors or to change the set of second stage fixed effects.
-#' @section Time-varying and time-constant variables / Individual-level and Group-level variables
-#' The formula automatically select the regressors that have to be included in the first stage. If an endogenous variables is specified, either the within estimator is used or second stage fixed effects have to be specified.
-#' @section Implementing the different estimators
-
+#' @param clustervar A string with the name of the cluster variable. If \code{clustervar = NULL} (default),
+#'  group indicator is used as a cluster variable.
+#' @param cores Number of cores to use for first stage computation. if \code{core = NULL} the number of cores
+#'  is set to \code{\link[parallel]{detectCores}-1}.
+#' @param n_small A positive integer indicating the minimum size of groups allowed.
+#'  Groups strictly smaller than \code{n_small} are dropped from the sample.
+#' @param run_second A logical evaluating to \code{TRUE} or \code{FALSE} indicating
+#'  whether the second stage should be performed.
+#' @param fitted_values A matrix containing the first stage fitted values.
+#'  To use only if the function \code{mdqr} has been already run and only the second stage is different.
+#'   For example, to change the clustering of the errors or to change the set of second-stage fixed effects.
+#' @details # Time-varying and time-constant variables / Individual-level and Group-level variables
+#'
+#' The formula automatically selects the regressors that have to be included in the first stage. If an endogenous variable is specified, either the within estimator is used or second-stage fixed effects have to be specified.
+#' @details # Implementing the different estimators
 #' ## Within Regression:
 #'
 #' Estimate the effect of union status on wage using a fixed effects regression.
-#' \code{formula(wage ~ union | 0 | 0 | 0 | group_ID, data, method = c("within"))}
+#'
+#' \code{mdqr(wage ~ union | 0 | 0 | 0 | group_ID, data, method = c("within"))}
 #'
 #' or
 #'
-#' #' \code{formula(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("within"))}
+#' \code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("within"))}
+#'
 #'
 #' ## Random Effects Regression
 #'
-#' \code{formula(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("reoi"))}
-#' \code{formula(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("regmm"))}
+#' \code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("reoi"))}
+#'
+#' \code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data,  method = c("regmm"))}
 #'
 #' ## Instrumental Variables
-#' Assume we want to estimate the effect of school budget (x) students' outcomes (y), where schools define the groups. Assume that an instrument z is available.
-#' \code{formula(y ~ 0 | x | z | 0 | group_ID, data, method = c("2sls"))}
-#' Covariates and or say county fixed effects can be included as follows:
-#' \code{formula(y ~ w | x | z | county | group_ID, data, method = c("2sls"))}
 #'
-#' If the model is overidentified "gmm" can be used instead.
+#' Assume we want to estimate the effect of school budget (x) students' outcomes (y), where schools define the groups. Assume that an instrument z is available.
+#'
+#' \code{mdqr(y ~ 0 | x | z | 0 | group_ID, data, method = c("2sls"))}
+#'
+#' Covariates and or say county fixed effects can be included as follows:
+#'
+#' \code{mdqr(y ~ w | x | z | county | group_ID, data, method = c("2sls"))}
+#'
+#' If the model is overidentified \code{"gmm"} can be used instead.
 #'
 #' @return
 #' A list of four elements. The first element contains regression results for each quantile. The second element contains the matrix of fitted values from the first stage. The third element is the vector of quantiles.
 #' see https://github.com/lrberge/fixest/blob/HEAD/R/ESTIMATION_FUNS.R for inspiration
+#'
 #' @author
 #' Martina Pons
 #'
-#' @references Melly Blaise, Pons Martina (2022): "Minimum Distance Estimation of Quantile Panel Data Models" ([](https://martinapons.github.io/files/MD.pdf)).
+#' @references \href{https://martinapons.github.io/files/MD.pdf}{Melly Blaise, Pons Martina (2022): "Minimum Distance Estimation of Quantile Panel Data Models"}.
+
 mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), clustervar = NULL, cores = NULL, n_small = 1, run_second = TRUE, fitted_values = NULL) {
   start <- Sys.time()
   formula <- Formula::as.Formula(formula)
@@ -91,7 +115,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
     dplyr::ungroup()
 
   data <- data %>% dplyr::add_count(group) # number of observations in each group.
-  data <- data %>% dplyr::filter(n >= n_small) # remove groups with less than n obs
+  data <- data %>% dplyr::filter(n >= n_small) # remove groups with less than n_small obs
 
   data %<>%
     dplyr::as_tibble() %>%
@@ -336,7 +360,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       second <- cbind(second, Z)
       inst_s <- paste0( "~" ,paste(names(Z), collapse = "+"))
       #form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(fen), 2, -1), inst_s))
-      form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", s.character(fex)[2], "|",  as.character(fen)[2], inst_s))
+      form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", as.character(fex)[2], "|",  as.character(fen)[2], inst_s))
       res <-  fixest::feols(form, second, cluster = clvar)
     }
   } else {

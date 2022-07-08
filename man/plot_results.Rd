@@ -17,3 +17,7 @@ A \code{ggplot}
 \description{
 Plot results
 }
+\section{Details Additional ggplot option can be added after the command. For example}{
+ plot_results(md_object, "treatment") +  labs(x = "Quantiles", y = "Point Estimates" , title = "My Title")
+}
+

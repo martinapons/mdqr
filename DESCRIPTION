@@ -18,7 +18,6 @@ Imports:
     MASS,
     Matrix,
     parallel,
-    stringr,
     tidyselect,
     quantreg,
     sandwich,
@@ -28,3 +27,4 @@ Imports:
     momentfit,
     ggplot2
 RoxygenNote: 7.1.2
+Roxygen: list(markdown = TRUE)
