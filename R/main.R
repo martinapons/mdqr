@@ -85,21 +85,15 @@ library(Matrix)
 mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), clustervar = NULL, cores = NULL, n_small = 1, run_second = TRUE, fitted_values = NULL) {
   start <- Sys.time()
   formula <- Formula::as.Formula(formula)
-
   myvar <- all.vars(formula)
   data <- dplyr::select(data, tidyselect::all_of(myvar), tidyselect::all_of(clustervar) ) # eventually need to add cluster var.
 
   data %<>% dplyr::as_tibble() %>% tidyr::drop_na()
-
   group <- stats::model.frame(formula(formula, lhs = 0, rhs = 5), data)
-
   group_id <- names(group) # groups are define by this variable
-
   names(group) <- c("group")
 
-
   # drop too small groups ----------------------------------------
-
   if  (group_id != "group") {
     if (sum(names(data) == "group") == 0 ) {
       data <- dplyr::bind_cols(data, group)
@@ -117,7 +111,6 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
 
   data <- data %>% dplyr::add_count(group) # number of observations in each group.
   data <- data %>% dplyr::filter(n >= n_small) # remove groups with less than n_small obs
-
 
   data %<>%
     dplyr::as_tibble() %>%
@@ -152,20 +145,15 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   endog_var <- names(end)
   exo_var <- names(exo)
 
-
   if (length(all.vars(fen)) > length(all.vars(fen)) & method != "within" & method != "ht") stop("Fewer instruments than endogenous variables. If you wish to use interval instrument select method fe or ht")
   if (length(all.vars(fen)) == 0 & length(all.vars(fen)) > 0) stop("External instrument is specified, but there is no endogeous variable")
-  # if (min(tapply(y[, 1], group[, 1], var) > 0) == 0) stop("The dependent variable must vary within groups / individuals.")
-#  if (length(all.vars(fen)) == 0 & method == "within") stop("The within estimator is used, but no endogenous variable specified.")
   if (method == "ols" & (length(all.vars(fen) ) >  0  & length(all.vars(ffe)) == 0 )) stop("OLS is used but there are endogenous variables.")
   if (method == "reoi" & length(all.vars(ffe)) > 0) stop("RE cannot be uesd with fixed effects in the second stage.")
   if (method == "ht" & length(all.vars(ffe)) > 0) stop("HT cannot be used with fixed effects in the second stage.")
   if (method == "regmm" & length(all.vars(ffe)) > 0) stop("RE cannot be uesd with fixed effects in the second stage.")
   if (method == "within" & length(all.vars(ffe)) > 0) stop("The within estimator cannot be use with fixed effects in the second stage. The within estimator only exploit variation within individuals (groups). If you want to include fixed effects as a higher level than the individual (group), use the option ols, gmm, or iv")
-
   if (length(all.vars(fz)) > 0){
     if (sum(tapply(z[[1]], group, stats::var) != 0) != 0 )  stop("The instrument is varying within individuals (groups). The instrument is only allowed to vary between individuals (groups)")
-
   }
 
   # --------------------------------------------------------------
@@ -193,10 +181,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   if (is.null(cores) == 1) {
     cores <- parallel::detectCores() - 1
   }
-
-  #form1 <- formula(paste0(stringr::str_sub(tchar(fdep), 1, -5), paste0(fex), "+ ", stringr::str_sub(tchar(fen), 2, -1)))
   form1 <- formula(paste0(as.character(fdep)[2], "~", as.character(fex)[2], "+ ", (as.character(fen)[2])))
-
 
   cl <- parallel::makeCluster(cores) # Set the number of clusters
   parallel::clusterExport(cl, c("fdep", "md_first_stage", "form1", "quantiles"), envir=environment()) # Functions needed
@@ -208,7 +193,6 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   environment(quantiles) <- .GlobalEnv
   environment(md_first_stage) <- .GlobalEnv
   environment(datalist) <- .GlobalEnv
-
 
   print("really starting...")
   first <- parallel::clusterApply(cl, datalist, md_first_stage, fdep, form1, quantiles)
@@ -224,7 +208,6 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   fitted <- dplyr::bind_rows(fitted)
   # -------------------
 
-
   mydep <- paste("fitted", quantiles, sep = "_")
   colnames(fitted) <- mydep
   } else {
@@ -238,7 +221,6 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   if (run_second == TRUE) {
     print("Second stage estimation starting...")
 
-
     if (fex == "~0") {
       fex <- "~1"
     }
@@ -248,7 +230,6 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
         dplyr::transmute(dplyr::across(tidyselect::everything(),  list(tdm = ~ . - mean(.)) , .names = "{.col}dem" ))
       inst_s <- paste0(paste(endog_var, collapse = "dem +"), "dem")
       second <- dplyr::bind_cols(b[, -1], data, fitted)
-      #form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(fen), 2, -1), "~", inst_s))
       form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", "~" , as.character(ffe)[2], "|", as.character(fen)[2], "~", inst_s))
 
       res <-  fixest::feols(form, second, cluster = clvar)
@@ -256,17 +237,14 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       if (length(fe) == 0) {
         form <- Formula::as.Formula(paste0(".[mydep]", fex))
       } else {
-        #form <- Formula::as.Formula(paste0(".[mydep]", paste(fex, "|", stringr::str_sub(tchar(ffe), 2, -1))))
         form <- Formula::as.Formula(paste0(".[mydep]", paste0("~", as.character(fex)[2], "|", as.character(ffe)[2])))
 
       }
       res <-  fixest::feols(form, second, cluster = clvar)
     } else if (method == "2sls") {
       if (length(fe) == 0) {
-        #form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(fen), 2, -1), fz))
         form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", "~" , as.character(fex)[2], "|", as.character(fen)[2], fz))
       } else {
-        #form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(ffe), 2, -1), "|", stringr::str_sub(tchar(fen), 2, -1), fz))
         form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", "~" , as.character(fex)[2], "|", as.character(ffe)[2], "|", as.character(fen)[2], fz))
 
       }
@@ -277,7 +255,6 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
         dplyr::transmute(dplyr::across(tidyselect::everything(),  list(tdm = ~ mean(.)) , .names = "{.col}m" ))
       second <- dplyr::bind_cols(b[, -1], data, fitted)
       inst_s <- paste0(paste(endog_var, collapse = "m +"), "m")
-      #form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(fen), 2, -1), "~", inst_s))
       form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", "~" , as.character(fex)[2], "|", as.character(fen)[2], "~", inst_s))
 
       res <-  fixest::feols(form, second, cluster = clvar)
@@ -315,8 +292,6 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       res <- list()
 
       for (u in quantiles) {
-        #form <- Formula::as.Formula(paste0(paste0("fitted_", u), fex, "+", stringr::str_sub(tchar(fen), 2, -1)))
-
         form <- Formula::as.Formula(paste0(paste0("fitted_", u), "~" , as.character(fex)[2] , "+", as.character(fen)[2]))
 
         model <- momentfit::momentModel(form, fz, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
@@ -343,10 +318,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       Z <- cbind(de, me)
 
       for (u in quantiles) {
-        #form <- Formula::as.Formula(paste0(paste0("fitted_", u), fex, "+", stringr::str_sub(tchar(fen), 2, -1)))
         form <- Formula::as.Formula(paste0(paste0("fitted_", u),  "~" , as.character(fex)[2], "+",  as.character(fen)[2]))
-
-
         model <- momentfit::momentModel(form, Z, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
         r <- momentfit::gmmFit(model, type = "twostep")
         rr <- summary(r, sandwich = TRUE, df.adj = FALSE) # whichone do we want? see 1.4.4 in https://cran.r-project.org/web/packages/momentfit/vignettes/gmmS4.pdf
@@ -370,7 +342,6 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       Z <- cbind(de, me)
       second <- cbind(second, Z)
       inst_s <- paste0( "~" ,paste(names(Z), collapse = "+"))
-      #form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(fen), 2, -1), inst_s))
       form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", as.character(fex)[2], "|",  as.character(fen)[2], inst_s))
 
       res <-  fixest::feols(form, second, cluster = clvar)
@@ -385,8 +356,6 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   print(Sys.time()- start)
   return(res)
   print(res[[1]])
-
-
 }
 
 

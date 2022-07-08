@@ -72,7 +72,7 @@ Estimate the effect of union status on wage using a fixed effects regression.
 
 or
 
-#' \code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("within"))}
+\code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("within"))}
 }
 
 \subsection{Random Effects Regression}{
@@ -92,7 +92,7 @@ Covariates and or say county fixed effects can be included as follows:
 
 \code{mdqr(y ~ w | x | z | county | group_ID, data, method = c("2sls"))}
 
-If the model is overidentified "gmm" can be used instead.
+If the model is overidentified \code{"gmm"} can be used instead.
 }
 }
 
