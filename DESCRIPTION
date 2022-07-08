@@ -4,8 +4,8 @@ Title: Run the minimum distance quantile regression estimator of Melly & Pons (2
 Version: 0.1.0
 Author: Martina Pons
 Maintainer: Martina Pons <martina.pons@vwi.unibe.ch>
-Description: This package implements the minimum distance quantile regression estimator suggested in Melly & Pons (2022). 
-    Use four spaces when indenting paragraphs within the Description.
+URL: https://github.com/martinapons/md_package
+Description: This package impelements the minimum distance estimator for quantile panel data model suggested in Melly and Pons (2022). The paper can be found under <https://martinapons.github.io/files/MD.pdf>. All estimators suggested in the paper can be implemented using this package. The package contains function for the estimation, for making a results table, and for plotting the results. 
 License: GPL-3
 Encoding: UTF-8
 LazyData: true

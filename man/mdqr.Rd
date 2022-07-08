@@ -21,22 +21,22 @@ mdqr(
 
 \item{data}{A data.frame containing the necessary variables to run the model.}
 
-\item{method}{A string}
+\item{method}{A character scalar indicates which method should be used in the second stage. The second stage estimators can use only the within variation (i.e. using an individual fixed effects approach) "within", the between variation "between". "reoi", and "regmm" perform random effects estimation implemented with the optimal instrument and efficient GMM, respectively. "ols" performs a least-squares second stage of the fitted values on X. "reoi" and "regmm" perform a second stage regression of the fitted values on X using an instrument vector Z. For "gmm", the efficient weighting matrix is used. Second stage fixed effect might be included with "ols", "2sls", and "gmm".}
 
-\item{quantiles}{A vector with the quantiles of interest.}
+\item{quantiles}{A vector with the quantiles of interest. The default is 0.1, 0.2, ... , 0.9.}
 
 \item{clustervar}{A string with the name of the cluster variable. If \code{clustervar = NULL} (default), group indicator is used as a cluster variable.}
 
 \item{cores}{Number of cores to use for first stage computation. if \code{core = NULL} the number of cores is set to \code{\link[parallel]{detectCores}-1}}
 
-\item{n_small}{A positive integer indicating the minimum size of groups allowed. Groups stricly smaller than \code{n_small} are dropped from the sample.}
+\item{n_small}{A positive integer indicating the minimum size of groups allowed. Groups strictly smaller than \code{n_small} are dropped from the sample.}
 
 \item{run_second}{A logical evaluating to \code{TRUE} or \code{FALSE} indicating whether the second stage should be performed.}
 
 \item{fitted_values}{A matrix containing the first stage fitted values. To use only if the function \code{mdqr} has been already run and only the second stage is different. For example, to change the clustering of the errors or to change the set of second stage fixed effects.}
 }
 \value{
-A list of two elements. The first element contains regression results for each quantile. The second element contain the matrix of fitted values from the first stage.
+A list of three elements. The first element contains regression results for each quantile. The second element contains the matrix of fitted values from the first stage. The third element is the vector of quantiles.
 }
 \description{
 Run minimum distance regression.
