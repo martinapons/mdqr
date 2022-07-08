@@ -81,6 +81,7 @@ library(Matrix)
 #'
 #' @references \href{https://martinapons.github.io/files/MD.pdf}{Melly Blaise, Pons Martina (2022): "Minimum Distance Estimation of Quantile Panel Data Models"}.
 
+
 mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), clustervar = NULL, cores = NULL, n_small = 1, run_second = TRUE, fitted_values = NULL) {
   start <- Sys.time()
   formula <- Formula::as.Formula(formula)
@@ -116,6 +117,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
 
   data <- data %>% dplyr::add_count(group) # number of observations in each group.
   data <- data %>% dplyr::filter(n >= n_small) # remove groups with less than n_small obs
+
 
   data %<>%
     dplyr::as_tibble() %>%
@@ -163,6 +165,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
 
   if (length(all.vars(fz)) > 0){
     if (sum(tapply(z[[1]], group, stats::var) != 0) != 0 )  stop("The instrument is varying within individuals (groups). The instrument is only allowed to vary between individuals (groups)")
+
   }
 
   # --------------------------------------------------------------
@@ -194,6 +197,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   #form1 <- formula(paste0(stringr::str_sub(tchar(fdep), 1, -5), paste0(fex), "+ ", stringr::str_sub(tchar(fen), 2, -1)))
   form1 <- formula(paste0(as.character(fdep)[2], "~", as.character(fex)[2], "+ ", (as.character(fen)[2])))
 
+
   cl <- parallel::makeCluster(cores) # Set the number of clusters
   parallel::clusterExport(cl, c("fdep", "md_first_stage", "form1", "quantiles"), envir=environment()) # Functions needed
   parallel::clusterEvalQ(cl, {
@@ -220,6 +224,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   fitted <- dplyr::bind_rows(fitted)
   # -------------------
 
+
   mydep <- paste("fitted", quantiles, sep = "_")
   colnames(fitted) <- mydep
   } else {
@@ -245,6 +250,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       second <- dplyr::bind_cols(b[, -1], data, fitted)
       #form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(fen), 2, -1), "~", inst_s))
       form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", "~" , as.character(ffe)[2], "|", as.character(fen)[2], "~", inst_s))
+
       res <-  fixest::feols(form, second, cluster = clvar)
     } else if (method == "ols") {
       if (length(fe) == 0) {
@@ -252,6 +258,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       } else {
         #form <- Formula::as.Formula(paste0(".[mydep]", paste(fex, "|", stringr::str_sub(tchar(ffe), 2, -1))))
         form <- Formula::as.Formula(paste0(".[mydep]", paste0("~", as.character(fex)[2], "|", as.character(ffe)[2])))
+
       }
       res <-  fixest::feols(form, second, cluster = clvar)
     } else if (method == "2sls") {
@@ -261,6 +268,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       } else {
         #form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(ffe), 2, -1), "|", stringr::str_sub(tchar(fen), 2, -1), fz))
         form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", "~" , as.character(fex)[2], "|", as.character(ffe)[2], "|", as.character(fen)[2], fz))
+
       }
       res <-  fixest::feols(form, second, cluster = clvar)
     } else if (method == "be") {
@@ -271,6 +279,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       inst_s <- paste0(paste(endog_var, collapse = "m +"), "m")
       #form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(fen), 2, -1), "~", inst_s))
       form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", "~" , as.character(fex)[2], "|", as.character(fen)[2], "~", inst_s))
+
       res <-  fixest::feols(form, second, cluster = clvar)
     } else if (method == "reoi") {
       lambda <- sapply(first, function(x) x[c("lambda_i")])
@@ -309,6 +318,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
         #form <- Formula::as.Formula(paste0(paste0("fitted_", u), fex, "+", stringr::str_sub(tchar(fen), 2, -1)))
 
         form <- Formula::as.Formula(paste0(paste0("fitted_", u), "~" , as.character(fex)[2] , "+", as.character(fen)[2]))
+
         model <- momentfit::momentModel(form, fz, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
         rr <- summary(momentfit::gmmFit(model, type = "twostep"))
         res[[which(u == quantiles)]] <- rr
@@ -336,6 +346,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
         #form <- Formula::as.Formula(paste0(paste0("fitted_", u), fex, "+", stringr::str_sub(tchar(fen), 2, -1)))
         form <- Formula::as.Formula(paste0(paste0("fitted_", u),  "~" , as.character(fex)[2], "+",  as.character(fen)[2]))
 
+
         model <- momentfit::momentModel(form, Z, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
         r <- momentfit::gmmFit(model, type = "twostep")
         rr <- summary(r, sandwich = TRUE, df.adj = FALSE) # whichone do we want? see 1.4.4 in https://cran.r-project.org/web/packages/momentfit/vignettes/gmmS4.pdf
@@ -361,6 +372,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       inst_s <- paste0( "~" ,paste(names(Z), collapse = "+"))
       #form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", fex, "|", stringr::str_sub(tchar(fen), 2, -1), inst_s))
       form <- Formula::as.Formula(paste0("c(", paste(mydep, collapse = ","), ")", as.character(fex)[2], "|",  as.character(fen)[2], inst_s))
+
       res <-  fixest::feols(form, second, cluster = clvar)
     }
   } else {
@@ -368,6 +380,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   }
   res <- list(res, fitted, quantiles, G)
   names(res) <- c("results", "fitted_values", "quantiles", "G" )
+
   print("total time: ")
   print(Sys.time()- start)
   return(res)

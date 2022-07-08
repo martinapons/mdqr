@@ -9,6 +9,7 @@
 #' Additional \code{\link[ggplot2]{ggplot}} options can be added after the command.
 #' For example: \code{plot_results(md_object, "treatment") +  labs(x = "Quantiles", y = "Point Estimates" , title = "My Title")}
 
+
 plot_results <- function(object, x){
   tab <- result_table(object, x)
   tab <-  tab %>% dplyr::as_tibble() %>% dplyr::mutate(lb = Estimate - 1.96*`Std. Error`)
