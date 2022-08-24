@@ -1,4 +1,4 @@
-Package: md
+Package: mdqr
 Type: Package
 Title: Run the minimum distance quantile regression estimator of Melly & Pons (2022)
 Version: 0.1.0
