@@ -13,7 +13,8 @@ mdqr(
   cores = NULL,
   n_small = 1,
   run_second = TRUE,
-  fitted_values = NULL
+  fitted_values = NULL,
+  run_time = FALSE
 )
 }
 \arguments{
@@ -40,7 +41,7 @@ might be included with \code{"ols"}, \code{"2sls"}, and \code{"gmm"}.}
 group indicator is used as a cluster variable.}
 
 \item{cores}{Number of cores to use for first stage computation. if \code{core = NULL} the number of cores
-is set to \code{\link[parallel]{detectCores}-1}.}
+is set to 1. To see the number of cores available in your computer type \code{\link[parallel]{detectCores}}.}
 
 \item{n_small}{A positive integer indicating the minimum size of groups allowed.
 Groups strictly smaller than \code{n_small} are dropped from the sample.}
@@ -51,9 +52,12 @@ whether the second stage should be performed.}
 \item{fitted_values}{A matrix containing the first stage fitted values.
 To use only if the function \code{mdqr} has been already run and only the second stage is different.
 For example, to change the clustering of the errors or to change the set of second-stage fixed effects.}
+
+\item{run_time}{A logical evaluating to \code{TRUE} or \code{FALSE} indicating
+whether the computation time should be printed.}
 }
 \value{
-A list of four elements. The first element contains regression results for each quantile. The second element contains the matrix of fitted values from the first stage. The third element is the vector of quantiles.
+A list of four elements. The first element contains regression results for each quantile. The second element contains the matrix of fitted values from the first stage. The third element is the vector of quantiles. The fourth elements contains the number of groups.
 see https://github.com/lrberge/fixest/blob/HEAD/R/ESTIMATION_FUNS.R for inspiration
 }
 \description{
@@ -63,42 +67,159 @@ Run minimum distance quantile regression.
 The formula automatically selects the regressors that have to be included in the first stage. If an endogenous variable is specified, either the within estimator is used or second-stage fixed effects have to be specified.
 }
 
-\section{Implementing the different estimators}{
-\subsection{Within Regression:}{
+\examples{
 
-Estimate the effect of union status on wage using a fixed effects regression.
 
-\code{mdqr(wage ~ union | 0 | 0 | 0 | group_ID, data, method = c("within"))}
+## Example 1: Grouped data, no instrument no second stage fixed effects
+# Generate artificial data.
+rm(list = ls())
+set.seed(1234)
+# Generate 100 groups with 30 individuals each.
+G <- 100
+Ng <- 30
+group <- rep(1:G, each = Ng)
+# Generate a binary treatment variable.
+treatment <- rep(rbinom(G, 1,0.5), each = Ng)
+# Generate a group-level variable.
+g_var <- rep(rnorm(G), each = Ng)
+# Generate an individual-level variable.
+i_var <- rnorm(Ng*G)
+# Generate the outcome.
+y <- 1 + treatment + g_var + i_var + rnorm(Ng * G) * (1 + 0.2 * treatment)
+# Estimate the quantile treatment effect
+fit <- mdqr(y~treatment+i_var+g_var | 0 | 0 | 0 | group, method = "ols",
+data = data.frame(y, i_var, g_var, treatment, group), cores = 1)
+# Compare with the true treatment effects
+qnorm(seq(0.1,0.9,0.1)) * 0.2 + 1
+# Now estimate the results at 19 quantiles using 4 cores and plot the treatment effects
+fit <- mdqr(y~treatment+i_var+g_var | 0 | 0 | 0 | group, method = "ols",
+ data = data.frame(y, i_var, g_var, treatment, group), quantiles = seq(0.05, 0.95, 0.05), cores = 2)
+summary_mdqr(fit, "treatment")
+plot_mdqr(fit, "treatment")
 
-or
 
-\code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("within"))}
+
+# Example 2: Grouped data, instrumental variable, no second stage fixed effects
+rm(list = ls())
+set.seed(1234)
+# Generate 100 groups with 30 individuals each.
+G <- 200
+Ng <- 30
+group <- rep(1:G, each = Ng)
+
+# Generate the treatment, an instrumental variable, and (unobservable) group effects
+sigma <- matrix(c(1, 0.5, 0, 0.5, 1, 0.5, 0, 0.5 ,1), ncol = 3)
+mat <- MASS::mvrnorm(G, mu = c(0,0,0), Sigma = sigma)
+g_effects <- rep(mat[,1], each = Ng)
+treatment <- rep(mat[,2], each = Ng)
+instrument <- rep(mat[,3], each = Ng)
+# Generate a group-level variable.
+g_var <- rep(rnorm(G), each = Ng)
+# Generate an individual-level variable.
+i_var <- rnorm(Ng*G)
+# Generate the outcome.
+y <- 1 + treatment + g_var + i_var + g_effects + rnorm(Ng * G) * (1 + 0.2 * treatment)
+# Estimate the treatment effect without an instrumental variable: the result is inconsistent.
+fit <- mdqr(y~treatment+i_var+g_var | 0 | 0 | 0 | group, method = "ols",
+data = data.frame(y, i_var, g_var, treatment, group), cores = 2)
+# Estimate the treatment effect without an instrumental variable.
+fitIV <- mdqr(y~i_var+g_var | treatment | instrument | 0 | group, method = "2sls",
+ data = data.frame(y, i_var, g_var, treatment,instrument, group), cores = 2)
+summary_mdqr(fitIV, "fit_treatment")
+# Compare with the true treatment effects
+qnorm(seq(0.1,0.9,0.1)) * 0.2 + 1
+# Plot results
+plot_mdqr(fitIV, "fit_treatment")
+
+
+# Example 3: Grouped data, no instrument, many fixed effects in the second stage
+rm(list = ls())
+set.seed(1234)
+
+# Generate data for 50 states, 20 years where groups are state x years cells.
+# Each group has 30 observations.
+S <- 50
+Y <- 20
+G <- S * Y
+Ng <- 30
+# Generate group identifier
+group <- rep(1:G, each = Ng)
+# Generate 50 states (groups) with 30 years of data.
+state <- rep(1:S, each = Ng*Y)
+state_fe <- rep(0.2 * rnorm(S), each = Ng*Y)
+first_treated <- rep(round(runif(S) * 20), each = Ng*Y)
+year <- rep(rep(1:Y, each = Ng), S)
+year_fe <- year * 0.001
+treated <- as.numeric(year >= first_treated)
+state_char <- rep(rnorm(S*Y), each = Ng)
+ind_char <- rnorm(Ng * G)
+# Generate the outcome. Note that we have state and year fixed effects.
+y <- 1 + treated + 0.5* state_char + 0.5 * ind_char + state_fe + year_fe +
+rnorm(Ng*G)*(1 + treated * 0.2)
+# Generate a data frame
+dat <- data.frame(y, state, state_fe, year, year_fe, treated, state_char, ind_char, group)
+# True quantile effect.
+qnorm(seq(0.1,0.9,0.1)) * 0.2 + 1
+# Estimate the treatment effects
+fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
+ data = dat, cores = 2)
+# Cluster the standard errors at the state level
+fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
+ data = dat, clustervar = "state", cores = 2)
+# Alternatively, without re-computing the first stage
+fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
+ data = dat, clustervar = "state", fitted_values = fit$fitted_values, cores = 2)
+# Result Table
+summary_mdqr(fit, "treated")
+# Plot Results
+plot_mdqr(fit, "treated")
+
+# Example 4: Classical Panel Data
+rm(list = ls())
+set.seed(1234)
+# Generate data for 100 individuals and 20 periods.
+N <- 100
+TT <- 20
+id <- rep(1:100, each = TT)
+# The individual effects are independent: re, fe and be are consistent.
+alpha <- rep(rnorm(N), each = TT)
+x <- rnorm(N*TT)
+# Generate the outcome variable.
+y <- x + alpha + rnorm(N*TT) * (1 + x * 0.2)
+# True quantile treatment effects at the 0.1, 0.25, 0.5, 0.75 and 0.9 quantiles:
+1+qnorm(seq(0.1,0.9,0.1))*0.2
+# Create dataset
+dat <- data.frame(y, x, id)
+# Compute the fixed-effects estimator.
+fitfe <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "within", cores = 2)
+# Results table.
+summary_mdqr(fitfe, "fit_x")
+# Plot results
+plot_mdqr(fitfe, "fit_x")
+# Compute the between estimator.
+fitbe <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "be", cores = 2)
+# Results table.
+summary_mdqr(fitbe, "fit_x")
+# Plot results.
+plot_mdqr(fitbe, "fit_x")
+# Compute the random effects estimator.
+fitregmm <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "regmm", cores = 2)
+# Results table.
+summary_mdqr(fitregmm, "x")
+# Plot results.
+plot_mdqr(fitregmm, "x")
+# Alternatively
+fitreoi <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "reoi", cores = 2)
+# Results table.
+summary_mdqr(fitreoi, "x")
+# Plot results.
+plot_mdqr(fitreoi, "x")
+
+
 }
-
-\subsection{Random Effects Regression}{
-
-\code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data, method = c("reoi"))}
-
-\code{mdqr(wage ~ 0 | union | 0 | 0 | group_ID, data,  method = c("regmm"))}
-}
-
-\subsection{Instrumental Variables}{
-
-Assume we want to estimate the effect of school budget (x) students' outcomes (y), where schools define the groups. Assume that an instrument z is available.
-
-\code{mdqr(y ~ 0 | x | z | 0 | group_ID, data, method = c("2sls"))}
-
-Covariates and or say county fixed effects can be included as follows:
-
-\code{mdqr(y ~ w | x | z | county | group_ID, data, method = c("2sls"))}
-
-If the model is overidentified \code{"gmm"} can be used instead.
-}
-}
-
 \references{
 \href{https://martinapons.github.io/files/MD.pdf}{Melly Blaise, Pons Martina (2022): "Minimum Distance Estimation of Quantile Panel Data Models"}.
 }
 \author{
-Martina Pons
+Martina Pons, Blaise Melly
 }

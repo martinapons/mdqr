@@ -1,8 +1,9 @@
 #' Plot results
 #' @export
 #'
-#' @param object An object estimated by \code{mdqr}.
+#' @param object An object of class \code{mdqr}.
 #' @param x A string containing the name of the regressor of interest
+#' @param level set confidence level; default is 95 percent.
 #' @return A \code{ggplot}
 #' @import ggplot2
 #' @details # Additional options
@@ -10,10 +11,12 @@
 #' For example: \code{plot_results(md_object, "treatment") +  labs(x = "Quantiles", y = "Point Estimates" , title = "My Title")}
 
 
-plot_results <- function(object, x){
-  tab <- result_table(object, x)
-  tab <-  tab %>% dplyr::as_tibble() %>% dplyr::mutate(lb = Estimate - 1.96*`Std. Error`)
-  tab <- tab %>% dplyr::mutate(ub = Estimate + 1.96*`Std. Error`)
+plot_mdqr <- function(object, x, level = 95){
+  q <- 1- (1- 0.01*level)/2
+  crit <- stats::qnorm(q)
+  tab <- summary_mdqr(object, x)
+  tab <-  tab %>% dplyr::as_tibble() %>% dplyr::mutate(lb = Estimate - crit*`Std. Error`)
+  tab <- tab %>% dplyr::mutate(ub = Estimate + crit*`Std. Error`)
 
   plot <-  ggplot2::ggplot(data = tab) +
     ggplot2::theme_light() +

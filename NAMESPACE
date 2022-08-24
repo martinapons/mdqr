@@ -2,6 +2,8 @@
 
 export(md_first_stage)
 export(mdqr)
-export(plot_results)
-export(result_table)
+export(plot_mdqr)
+export(summary_mdqr)
 import(ggplot2)
+importFrom(magrittr,"%<>%")
+importFrom(magrittr,"%>%")

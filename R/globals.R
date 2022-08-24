@@ -1,2 +1,2 @@
 
-globalVariables(c("n", "var", "g","%>%", "%<>%", "lb", "ub", "Quantiles", "Std. Error", "Estimate"))
+globalVariables(c("n", "var", "g", "lb", "ub", "Quantiles", "Std. Error", "Estimate", "return.mdqr", "crit"))
