@@ -18,7 +18,7 @@
 #' Note that all part of the formula have to be specified. Use \code{0} to leave
 #' it unspecified, e.g.\code{y ~ exo_1 + exo_2 | 0 | 0 | fe_1 + fe_2 | group_ID }.
 #' Only second stage fixed effects should be included in the formula. If you wish to
-#'  estimate a within model you don't need to include fixed effects (see 'details').
+#'  estimate a within model you don't need to include fixed effects (see Example 4).
 #' @param data 	A data.frame containing the necessary variables to run the model.
 #' @param method A character scalar indicates which method should be used in the second stage.
 #'  The second stage estimators can use only the within variation (i.e. using an individual
@@ -33,7 +33,8 @@
 #' @param cores Number of cores to use for first stage computation. if \code{core = NULL} the number of cores
 #'  is set to 1. To see the number of cores available in your computer type \code{\link[parallel]{detectCores}}.
 #' @param n_small A positive integer indicating the minimum size of groups allowed.
-#'  Groups strictly smaller than \code{n_small} are dropped from the sample.
+#'  Groups strictly smaller than \code{n_small - #first stage regression - 1} are dropped from the sample.
+#'  If left unspecified it is set to 1.
 #' @param run_second A logical evaluating to \code{TRUE} or \code{FALSE} indicating
 #'  whether the second stage should be performed.
 #' @param fitted_values A matrix containing the first stage fitted values.
@@ -47,7 +48,6 @@
 #'
 #' @importFrom magrittr %>%
 #' @importFrom magrittr %<>%
-
 #'
 #' @examples
 #'
@@ -208,7 +208,7 @@
 #' @references \href{https://martinapons.github.io/files/MD.pdf}{Melly Blaise, Pons Martina (2022): "Minimum Distance Estimation of Quantile Panel Data Models"}.
 
 
-mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), clustervar = NULL, cores = NULL, n_small = 1, run_second = TRUE, fitted_values = NULL, run_time = FALSE) {
+mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), clustervar = NULL, cores = NULL, n_small = NULL, run_second = TRUE, fitted_values = NULL, run_time = FALSE) {
   if (is.null(cores) ==1 ) {
     message("The code is running on 1 core. If you want to use parallel computing specify the number of cores using the option 'cores'. To detect the number of cores on the current computer run 'detectCores()'")
   }
@@ -217,6 +217,9 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
     stop("data must be a data.frame.")
   }
 
+  if (is.null(n_small)){
+    n_small <- 1
+  }
   start <- Sys.time()
   formula <- Formula::as.Formula(formula)
   myvar <- all.vars(formula)
@@ -226,7 +229,6 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   group_id <- names(group) # groups are defined by this variable
   names(group) <- c("group")
 
-  # drop too small groups ----------------------------------------
   if  (group_id != "group") {
     if (sum(names(data) == "group") == 0 ) {
       data <- dplyr::bind_cols(data, group)
@@ -244,7 +246,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
     dplyr::ungroup()
 
   data <- data %>% dplyr::add_count(group) # number of observations in each group.
-  data <- data %>% dplyr::filter(n >= n_small) # remove groups with less than n_small obs
+  data <- data %>% dplyr::filter(n >= n_small + 1) # remove groups with less than n_small obs + 1 (at least 1 degree of freedom for the constant)
 
   # recode the variable group such that is start at 1 and ends at G
   data %<>%
@@ -256,6 +258,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   data <- dplyr::arrange(data, group) # sort the data
   G <- max(data$group) # number of groups
 
+  group <- data$group
   if (is.null(clustervar)){ # if no clustervar is specified, the group identifies is used.
     clvar <- group
   } else {
@@ -290,66 +293,67 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   if (method == "within" & length(all.vars(ffe)) > 0) stop("The within estimator cannot be use with fixed effects in the second stage. The within estimator only exploit variation within individuals (groups). If you want to include fixed effects as a higher level than the individual (group), use the option ols, gmm, or iv")
   if (length(all.vars(fz)) > 0){
     for (l in 1:length(all.vars(fz))){
-  if (sum(tapply(z[[l]],data$group, stats::var) != 0) != 0 )  stop("The instrument is varying within individuals (groups). The instrument is only allowed to vary between individuals (groups)")
+      if (sum(tapply(z[[l]],data$group, stats::var) != 0) != 0 )  stop("The instrument is varying within individuals (groups). The instrument is only allowed to vary between individuals (groups)")
     }
   }
   if (run_second == F & (is.null(fitted_values) == 0)) stop("No estimation to perform. Either you set run_second = TRUE or you let the fitted values unspecified.")
   # --------------------------------------------------------------
   if (is.null(fitted_values) == 1) {
     if (run_time == TRUE){
-  print(Sys.time()-start)
-  print("Prepare data for the first stage...")
+      print(Sys.time()-start)
+      print("Prepare data for the first stage...")
     }
-  # This part of the code generates a list containing the data for each first stage regression.
-  datalist <- NULL
-  # If there are many groups, this line divide the dataset in smaller peaces.
-  data$g <- round(data$group * 0.001) + 1 # It would be possible to remove this line and work directly with the groups. However, separating the problem into smaller problem is computationally faster.
-  gg <- max(data$g)
+    # This part of the code generates a list containing the data for each first stage regression.
+    datalist <- NULL
+    # If there are many groups, this line divide the dataset in smaller peaces.
+    data$g <- round(data$group * 0.001) + 1 # It would be possible to remove this line and work directly with the groups. However, separating the problem into smaller problem is computationally faster.
+    gg <- max(data$g)
 
-  for (i in 1:gg) {
-    first1 <- data %>% dplyr::filter(g == i)
-    gr <- c(min(first1$group):max(first1$group))
-    datalist1 <- lapply(gr, function(gr) first1 %>% dplyr::filter(group == gr))
-    datalist <- c(datalist, datalist1)
-  }
+    for (i in 1:gg) {
+      first1 <- data %>% dplyr::filter(g == i)
+      gr <- c(min(first1$group):max(first1$group))
+      datalist1 <- lapply(gr, function(gr) first1 %>% dplyr::filter(group == gr))
+      datalist <- c(datalist, datalist1)
+    }
 
-  # First stage ---------------------------------------------------------------------------------
-  if (run_time == TRUE){
-  print(Sys.time()- start)
-  print("First stage estimation starting...")
-  }
-  if (is.null(cores) == 1) {
-    cores <- 1
-  }
-  form1 <- formula(paste0(as.character(fdep)[2], "~", as.character(fex)[2], "+ ", (as.character(fen)[2])))
+    # First stage ---------------------------------------------------------------------------------
+    if (run_time == TRUE){
+      print(Sys.time()- start)
+      print("First stage estimation starting...")
+    }
+    if (is.null(cores) == 1) {
+      cores <- 1
+    }
+    form1 <- formula(paste0(as.character(fdep)[2], "~", as.character(fex)[2], "+ ", (as.character(fen)[2])))
 
-  cl <- parallel::makeCluster(cores) # Set the number of clusters
-  parallel::clusterExport(cl, c("fdep", "md_first_stage", "form1", "quantiles"), envir=environment()) # Functions needed
-  parallel::clusterEvalQ(cl, {
-    library(quantreg)
-  })
-  environment(fdep) <- .GlobalEnv
-  environment(form1) <- .GlobalEnv
-  environment(quantiles) <- .GlobalEnv
-  environment(md_first_stage) <- .GlobalEnv
-  environment(datalist) <- .GlobalEnv
+    cl <- parallel::makeCluster(cores) # Set the number of clusters
+    parallel::clusterExport(cl, c("fdep", "md_first_stage", "form1", "quantiles", "n_small"), envir=environment()) # Functions needed
+    parallel::clusterEvalQ(cl, {
+      library(quantreg)
+    })
+    environment(fdep) <- .GlobalEnv
+    environment(form1) <- .GlobalEnv
+    environment(quantiles) <- .GlobalEnv
+    environment(md_first_stage) <- .GlobalEnv
+    environment(datalist) <- .GlobalEnv
+    environment(n_small) <- .GlobalEnv
 
-  first <- parallel::clusterApply(cl, datalist, md_first_stage, fdep, form1, quantiles)
+    first <- parallel::clusterApply(cl, datalist, md_first_stage, fdep, form1, quantiles, n_small)
 
-  parallel::stopCluster(cl)
-  if (run_time == TRUE){
-  print("First stage estimation completed.")
-    print(Sys.time()- start)
-}
+    parallel::stopCluster(cl)
+    if (run_time == TRUE){
+      print("First stage estimation completed.")
+      print(Sys.time()- start)
+    }
 
-  # Extract Fitted values: the fitted values are a list in a list.
-  fitted <- lapply(first, function(x) x[c("fitted")])
-  fitted <- lapply(fitted, data.frame, stringsAsFactors = FALSE)
-  fitted <- dplyr::bind_rows(fitted)
-  # -------------------
+    # Extract Fitted values: the fitted values are a list in a list.
+    fitted <- lapply(first, function(x) x[c("fitted")])
+    fitted <- lapply(fitted, data.frame, stringsAsFactors = FALSE)
+    fitted <- dplyr::bind_rows(fitted)
+    # -------------------
 
-  mydep <- paste("fitted", quantiles, sep = "_")
-  colnames(fitted) <- mydep
+    mydep <- paste("fitted", quantiles, sep = "_")
+    colnames(fitted) <- mydep
   } else {
     fitted <- fitted_values
     mydep <- paste("fitted", quantiles, sep = "_")
@@ -359,8 +363,8 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
 
   if (run_second == TRUE) {
     if (run_time == TRUE){
-    print("Second stage estimation starting...")
-}
+      print("Second stage estimation starting...")
+    }
     if (fex == "~0") {
       fex <- "~1"
     }
@@ -434,7 +438,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       for (u in quantiles) {
         form <- Formula::as.Formula(paste0(paste0("fitted_", u), "~" , as.character(fex)[2] , "+", as.character(fen)[2]))
 
-        model <- momentfit::momentModel(form, fz, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
+        model <- momentfit::momentModel(form, fz, data = second, vcov = "CL", vcovOptions = list(cluster = data.frame(clvar)))
         rr <- summary(momentfit::gmmFit(model, type = "twostep"))
         res[[which(u == quantiles)]] <- rr
       }
@@ -459,7 +463,7 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       res <- list()
       for (u in quantiles) {
         form <- Formula::as.Formula(paste0(paste0("fitted_", u),  "~" , as.character(fex)[2]))
-        model <- momentfit::momentModel(form, Z, data = second, vcov = "CL", vcovOptions = list(cluster = clvar))
+        model <- momentfit::momentModel(form, Z, data = second, vcov = "CL", vcovOptions = list(cluster = data.frame(clvar)))
         r <- momentfit::gmmFit(model, type = "twostep")
         rr <- momentfit::summary(r, sandwich = TRUE, df.adj = FALSE) # see 1.4.4 in https://cran.r-project.org/web/packages/momentfit/vignettes/gmmS4.pdf
         res[[which(u == quantiles)]] <- rr
@@ -489,12 +493,15 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   } else {
     res <- NULL
   }
+  # count group that were used for estimation
+  G <- length(unique(group[!is.na(fitted[, 1])]))
+
   # save results into a list.
   res <- list(res, fitted, quantiles, G)
   names(res) <- c("results", "fitted_values", "quantiles", "G" )
   if (run_time == TRUE){
-  print("total time: ")
-  print(Sys.time()- start)
+    print("total time: ")
+    print(Sys.time()- start)
   }
 
   class(res) <- "mdqr"

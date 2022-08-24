@@ -5,7 +5,7 @@
 \title{Run first stage regression
 This function is called by the mdqr() function.}
 \usage{
-md_first_stage(data1, fdep, form1, quantiles)
+md_first_stage(data1, fdep, form1, quantiles, n_small)
 }
 \arguments{
 \item{data1}{data Subsample of dataset containing one group.}
@@ -15,6 +15,8 @@ md_first_stage(data1, fdep, form1, quantiles)
 \item{form1}{formula containing endogenous and exogenous regressors.}
 
 \item{quantiles}{vector of quantiles.}
+
+\item{n_small}{Excludes groups with few observations.}
 }
 \description{
 Run first stage regression

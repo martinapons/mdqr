@@ -5,8 +5,9 @@
 #' @param fdep formula containing the dependent variable.
 #' @param form1 formula containing endogenous and exogenous regressors.
 #' @param quantiles vector of quantiles.
+#' @param n_small Excludes groups with few observations.
 
-md_first_stage <- function(data1, fdep, form1, quantiles) {
+md_first_stage <- function(data1, fdep, form1, quantiles, n_small) {
 
   m <- stats::model.frame(form1, data1) # this deals with cases with factor variables with 1 level only.
   # esclude variables that do not vary within groups.
@@ -36,11 +37,16 @@ md_first_stage <- function(data1, fdep, form1, quantiles) {
   if (is.null(c(dim(mm)[2]))){
     lambda_i <- array(0, c(1,1, length(quantiles)))
   }
+
+
+  if ( (dim(mm)[1] - dim(mm)[2] ) >= n_small ) { # This makes sure that we don't have a perfect fit.
+
   y <- stats::model.frame(fdep, data1)[, 1]
   for (u in quantiles) {
     qreg <- quantreg::rq(y ~ mm - 1, data = data1, tau = u) # first stage quantile regression
     fitted[, 1, which(quantiles == u)] <- fitted(qreg) # Save the fitted values
     lambda_i[, , which(quantiles == u)] <- quantreg::summary.rq(qreg, se = "ker", covariance = T)$cov / dim(data1)[1] # covariance matrix for each group
+  }
   }
   store <- list(fitted, lambda_i, mm)
   names(store) <- c("fitted", "lambda_i", "mm")
