@@ -497,8 +497,8 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   G <- length(unique(group[!is.na(fitted[, 1])]))
 
   # save results into a list.
-  res <- list(res, fitted, quantiles, G)
-  names(res) <- c("results", "fitted_values", "quantiles", "G" )
+  res <- list(res, second, quantiles, G)
+  names(res) <- c("results", "data", "quantiles", "G" )
   if (run_time == TRUE){
     print("total time: ")
     print(Sys.time()- start)
