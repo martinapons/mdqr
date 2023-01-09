@@ -304,17 +304,19 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
       print("Prepare data for the first stage...")
     }
     # This part of the code generates a list containing the data for each first stage regression.
-    datalist <- NULL
-    # If there are many groups, this line divide the dataset in smaller peaces.
-    data$g <- round(data$group * 0.001) + 1 # It would be possible to remove this line and work directly with the groups. However, separating the problem into smaller problem is computationally faster.
-    gg <- max(data$g)
-
-    for (i in 1:gg) {
-      first1 <- data %>% dplyr::filter(g == i)
-      gr <- c(min(first1$group):max(first1$group))
-      datalist1 <- lapply(gr, function(gr) first1 %>% dplyr::filter(group == gr))
-      datalist <- c(datalist, datalist1)
-    }
+    datalist <- data %>% dplyr::group_split(group)
+    # datalist <- NULL
+    # # If there are many groups, this line divide the dataset in smaller peaces.
+    # data$g <- round(data$group * 0.001) + 1 # It would be possible to remove this line and work directly with the groups. However, separating the problem into smaller problem is computationally faster.
+    # gg <- max(data$g)
+    #
+    #
+    # for (i in 1:gg) {
+    #   first1 <- data %>% dplyr::filter(g == i)
+    #   gr <- c(min(first1$group):max(first1$group))
+    #   datalist1 <- lapply(gr, function(gr) first1 %>% dplyr::filter(group == gr))
+    #   datalist <- c(datalist, datalist1)
+    # }
 
     # First stage ---------------------------------------------------------------------------------
     if (run_time == TRUE){
