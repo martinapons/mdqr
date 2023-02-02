@@ -2,7 +2,16 @@
 
 This package performs the Minimum Distance Estimator suggested in Melly and Pons (2023). 
 
+## Install the Package 
 
+``` R
+# install package
+remotes::install_github("martinapons/mdqr")
+```
+
+Do you prefer Stata? No worries! We also have a Stata package [here](https://github.com/bmelly/Stata).
+
+## Description
 `mdqr` computes the minimum distance quantile regression (MDQR) estimator suggested in Melly and Pons (2022). This estimator can be applied whenever the data has two dimensions. For instance, we may follow the same individuals during several periods (classical panel data). Or we may have individual-level data, but the treatment varies at the county level (grouped data). In both cases, mdqr estimates the effect of the regressors on the conditional quantiles of the dependent variable.
  In this help file, we focus on grouped data applications and use the corresponding terminology.
 
