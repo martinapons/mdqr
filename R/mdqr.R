@@ -92,7 +92,7 @@
 #' # Estimate the treatment effect without an instrumental variable: the result is inconsistent.
 #' fit <- mdqr(y~treatment+i_var+g_var | 0 | 0 | 0 | group, method = "ols",
 #' data = data.frame(y, i_var, g_var, treatment, group), cores = 1)
-#' # Estimate the treatment effect without an instrumental variable.
+#' # Estimate the treatment effect with an instrumental variable.
 #' fitIV <- mdqr(y~i_var+g_var | treatment | instrument | 0 | group, method = "2sls",
 #'  data = data.frame(y, i_var, g_var, treatment,instrument, group), cores = 1)
 #' summary_mdqr(fitIV, "fit_treatment")
@@ -138,7 +138,7 @@
 #'  data = dat, clustervar = "state", cores = 1)
 #' # Alternatively, without re-computing the first stage
 #' fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
-#'  data = dat, clustervar = "state", fitted_values = fit$fitted_values, cores = 1)
+#'  data = dat, clustervar = "state", fitted_values = fit$data[, ncol(fit$data)- length(fit$quantiles):1+1], cores = 1)
 #' # Result Table
 #' summary_mdqr(fit, "treated")
 #' # Plot Results
