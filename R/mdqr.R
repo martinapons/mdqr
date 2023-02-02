@@ -138,7 +138,8 @@
 #'  data = dat, clustervar = "state", cores = 1)
 #' # Alternatively, without re-computing the first stage
 #' fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
-#'  data = dat, clustervar = "state", fitted_values = fit$data[, ncol(fit$data)- length(fit$quantiles):1+1], cores = 1)
+#'  data = dat, clustervar = "state",
+#'  fitted_values = fit$data[, ncol(fit$data)- length(fit$quantiles):1+1], cores = 1)
 #' # Result Table
 #' summary_mdqr(fit, "treated")
 #' # Plot Results
