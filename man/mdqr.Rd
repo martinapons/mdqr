@@ -7,7 +7,7 @@
 mdqr(
   formula,
   data,
-  method = c("within", "be", "reoi", "regmm", "ols", "2sls", "gmm"),
+  method = c("ols", "within", "be", "reoi", "regmm", "2sls", "gmm"),
   quantiles = seq(0.1, 0.9, 0.1),
   clustervar = NULL,
   cores = NULL,
@@ -92,9 +92,9 @@ fit <- mdqr(y~treatment+i_var+g_var | 0 | 0 | 0 | group, method = "ols",
 data = data.frame(y, i_var, g_var, treatment, group), cores = 1)
 # Compare with the true treatment effects
 qnorm(seq(0.1,0.9,0.1)) * 0.2 + 1
-# Now estimate the results at 19 quantiles using 4 cores and plot the treatment effects
+# Now estimate the results at 19 quantiles and plot the treatment effects
 fit <- mdqr(y~treatment+i_var+g_var | 0 | 0 | 0 | group, method = "ols",
- data = data.frame(y, i_var, g_var, treatment, group), quantiles = seq(0.05, 0.95, 0.05), cores = 2)
+ data = data.frame(y, i_var, g_var, treatment, group), quantiles = seq(0.05, 0.95, 0.05), cores = 1)
 summary_mdqr(fit, "treatment")
 plot_mdqr(fit, "treatment")
 
@@ -122,10 +122,10 @@ i_var <- rnorm(Ng*G)
 y <- 1 + treatment + g_var + i_var + g_effects + rnorm(Ng * G) * (1 + 0.2 * treatment)
 # Estimate the treatment effect without an instrumental variable: the result is inconsistent.
 fit <- mdqr(y~treatment+i_var+g_var | 0 | 0 | 0 | group, method = "ols",
-data = data.frame(y, i_var, g_var, treatment, group), cores = 2)
+data = data.frame(y, i_var, g_var, treatment, group), cores = 1)
 # Estimate the treatment effect without an instrumental variable.
 fitIV <- mdqr(y~i_var+g_var | treatment | instrument | 0 | group, method = "2sls",
- data = data.frame(y, i_var, g_var, treatment,instrument, group), cores = 2)
+ data = data.frame(y, i_var, g_var, treatment,instrument, group), cores = 1)
 summary_mdqr(fitIV, "fit_treatment")
 # Compare with the true treatment effects
 qnorm(seq(0.1,0.9,0.1)) * 0.2 + 1
@@ -163,13 +163,13 @@ dat <- data.frame(y, state, state_fe, year, year_fe, treated, state_char, ind_ch
 qnorm(seq(0.1,0.9,0.1)) * 0.2 + 1
 # Estimate the treatment effects
 fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
- data = dat, cores = 2)
+ data = dat, cores = 1)
 # Cluster the standard errors at the state level
 fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
- data = dat, clustervar = "state", cores = 2)
+ data = dat, clustervar = "state", cores = 1)
 # Alternatively, without re-computing the first stage
 fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
- data = dat, clustervar = "state", fitted_values = fit$fitted_values, cores = 2)
+ data = dat, clustervar = "state", fitted_values = fit$fitted_values, cores = 1)
 # Result Table
 summary_mdqr(fit, "treated")
 # Plot Results
@@ -192,25 +192,25 @@ y <- x + alpha + rnorm(N*TT) * (1 + x * 0.2)
 # Create dataset
 dat <- data.frame(y, x, id)
 # Compute the fixed-effects estimator.
-fitfe <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "within", cores = 2)
+fitfe <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "within", cores = 1)
 # Results table.
 summary_mdqr(fitfe, "fit_x")
 # Plot results
 plot_mdqr(fitfe, "fit_x")
 # Compute the between estimator.
-fitbe <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "be", cores = 2)
+fitbe <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "be", cores = 1)
 # Results table.
 summary_mdqr(fitbe, "fit_x")
 # Plot results.
 plot_mdqr(fitbe, "fit_x")
 # Compute the random effects estimator.
-fitregmm <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "regmm", cores = 2)
+fitregmm <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "regmm", cores = 1)
 # Results table.
 summary_mdqr(fitregmm, "x")
 # Plot results.
 plot_mdqr(fitregmm, "x")
 # Alternatively
-fitreoi <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "reoi", cores = 2)
+fitreoi <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "reoi", cores = 1)
 # Results table.
 summary_mdqr(fitreoi, "x")
 # Plot results.

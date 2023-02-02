@@ -1,32 +1,40 @@
-Package: mdqr
 Type: Package
-Title: Run the minimum distance quantile regression estimator of Melly & Pons (2022)
+Package: mdqr
+Title: Run the minimum distance quantile regression estimator of Melly &
+    Pons (2022)
 Version: 0.1.0
 Author: Martina Pons
 Maintainer: Martina Pons <martina.pons@vwi.unibe.ch>
-URL: https://github.com/martinapons/md_package
-Description: This package impelements the minimum distance estimator for quantile panel data model suggested in Melly and Pons (2022). The paper can be found under <https://martinapons.github.io/files/MD.pdf>. All estimators suggested in the paper can be implemented using this package. The package contains function for the estimation, for making a results table, and for plotting the results. 
+Description: This package impelements the minimum distance estimator for
+    quantile panel data model suggested in Melly and Pons (2022). The
+    paper can be found under <https://martinapons.github.io/files/MD.pdf>.
+    All estimators suggested in the paper can be implemented using this
+    package. The package contains function for the estimation, for making
+    a results table, and for plotting the results.
 License: GPL-3
-Encoding: UTF-8
-LazyData: true
+URL: https://github.com/martinapons/md_package
 Imports: 
+    AER,
     dplyr,
-    lmtest,
     emulator,
     fixest,
     Formula,
+    furrr,
+    future,
+    ggplot2,
+    lmtest,
+    magrittr,
     MASS,
     Matrix,
-    parallel,
-    tidyselect,
+    methods,
+    momentfit,
+    plm,
     quantreg,
     sandwich,
-    AER,
+    stats,
     tidyr,
-    magrittr,
-    methods,
-    plm,
-    momentfit,
-    ggplot2
-RoxygenNote: 7.2.3
+    tidyselect
+Encoding: UTF-8
+LazyData: true
 Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3

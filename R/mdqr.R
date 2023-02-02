@@ -1,15 +1,3 @@
-# library(parallel)
-# library(stringr)
-# library(Formula)
-# library(MASS)
-# library(emulator)
-# library(dplyr)
-# library(fixest)
-# library(tidyselect)
-# library(tidyr)
-# library(Matrix)
-
-
 #' Run minimum distance quantile regression.
 #' @export
 #'
@@ -73,9 +61,9 @@
 #' data = data.frame(y, i_var, g_var, treatment, group), cores = 1)
 #' # Compare with the true treatment effects
 #' qnorm(seq(0.1,0.9,0.1)) * 0.2 + 1
-#' # Now estimate the results at 19 quantiles using 4 cores and plot the treatment effects
+#' # Now estimate the results at 19 quantiles and plot the treatment effects
 #' fit <- mdqr(y~treatment+i_var+g_var | 0 | 0 | 0 | group, method = "ols",
-#'  data = data.frame(y, i_var, g_var, treatment, group), quantiles = seq(0.05, 0.95, 0.05), cores = 2)
+#'  data = data.frame(y, i_var, g_var, treatment, group), quantiles = seq(0.05, 0.95, 0.05), cores = 1)
 #' summary_mdqr(fit, "treatment")
 #' plot_mdqr(fit, "treatment")
 #'
@@ -103,10 +91,10 @@
 #' y <- 1 + treatment + g_var + i_var + g_effects + rnorm(Ng * G) * (1 + 0.2 * treatment)
 #' # Estimate the treatment effect without an instrumental variable: the result is inconsistent.
 #' fit <- mdqr(y~treatment+i_var+g_var | 0 | 0 | 0 | group, method = "ols",
-#' data = data.frame(y, i_var, g_var, treatment, group), cores = 2)
+#' data = data.frame(y, i_var, g_var, treatment, group), cores = 1)
 #' # Estimate the treatment effect without an instrumental variable.
 #' fitIV <- mdqr(y~i_var+g_var | treatment | instrument | 0 | group, method = "2sls",
-#'  data = data.frame(y, i_var, g_var, treatment,instrument, group), cores = 2)
+#'  data = data.frame(y, i_var, g_var, treatment,instrument, group), cores = 1)
 #' summary_mdqr(fitIV, "fit_treatment")
 #' # Compare with the true treatment effects
 #' qnorm(seq(0.1,0.9,0.1)) * 0.2 + 1
@@ -144,13 +132,13 @@
 #' qnorm(seq(0.1,0.9,0.1)) * 0.2 + 1
 #' # Estimate the treatment effects
 #' fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
-#'  data = dat, cores = 2)
+#'  data = dat, cores = 1)
 #' # Cluster the standard errors at the state level
 #' fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
-#'  data = dat, clustervar = "state", cores = 2)
+#'  data = dat, clustervar = "state", cores = 1)
 #' # Alternatively, without re-computing the first stage
 #' fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
-#'  data = dat, clustervar = "state", fitted_values = fit$fitted_values, cores = 2)
+#'  data = dat, clustervar = "state", fitted_values = fit$fitted_values, cores = 1)
 #' # Result Table
 #' summary_mdqr(fit, "treated")
 #' # Plot Results
@@ -173,25 +161,25 @@
 #' # Create dataset
 #' dat <- data.frame(y, x, id)
 #' # Compute the fixed-effects estimator.
-#' fitfe <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "within", cores = 2)
+#' fitfe <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "within", cores = 1)
 #' # Results table.
 #' summary_mdqr(fitfe, "fit_x")
 #' # Plot results
 #' plot_mdqr(fitfe, "fit_x")
 #' # Compute the between estimator.
-#' fitbe <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "be", cores = 2)
+#' fitbe <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "be", cores = 1)
 #' # Results table.
 #' summary_mdqr(fitbe, "fit_x")
 #' # Plot results.
 #' plot_mdqr(fitbe, "fit_x")
 #' # Compute the random effects estimator.
-#' fitregmm <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "regmm", cores = 2)
+#' fitregmm <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "regmm", cores = 1)
 #' # Results table.
 #' summary_mdqr(fitregmm, "x")
 #' # Plot results.
 #' plot_mdqr(fitregmm, "x")
 #' # Alternatively
-#' fitreoi <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "reoi", cores = 2)
+#' fitreoi <- mdqr(y ~ x | 0 | 0 | 0 | id, data = dat, method = "reoi", cores = 1)
 #' # Results table.
 #' summary_mdqr(fitreoi, "x")
 #' # Plot results.
@@ -208,7 +196,20 @@
 #' @references \href{https://martinapons.github.io/files/MD.pdf}{Melly Blaise, Pons Martina (2022): "Minimum Distance Estimation of Quantile Panel Data Models"}.
 
 
-mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols", "2sls", "gmm"), quantiles = seq(0.1, 0.9, 0.1), clustervar = NULL, cores = NULL, n_small = NULL, run_second = TRUE, fitted_values = NULL, run_time = FALSE) {
+mdqr <- function(formula,
+                 data,
+                 method = c( "ols", "within", "be", "reoi", "regmm", "2sls", "gmm"),
+                 quantiles = seq(0.1, 0.9, 0.1),
+                 clustervar = NULL,
+                 cores = NULL,
+                 n_small = NULL,
+                 run_second = TRUE,
+                 fitted_values = NULL,
+                 run_time = FALSE
+                 ) {
+
+  method = match.arg(method) # check imput arguments
+
   if (is.null(cores) ==1 ) {
     message("The code is running on 1 core. If you want to use parallel computing specify the number of cores using the option 'cores'. To detect the number of cores on the current computer run 'detectCores()'")
   }
@@ -217,12 +218,13 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
     stop("data must be a data.frame.")
   }
 
-  if (is.null(n_small)){
+  if (is.null(n_small)) {
     n_small <- 1
   }
-  start <- Sys.time()
+
+  start   <- Sys.time()
   formula <- Formula::as.Formula(formula)
-  myvar <- all.vars(formula)
+  myvar   <- all.vars(formula)
   data <- dplyr::select(data, tidyselect::all_of(myvar), tidyselect::all_of(clustervar) ) # dataset containing only necessary columns.
   data %<>% dplyr::as_tibble() %>% tidyr::drop_na() # drop observations with missing values
   group <- stats::model.frame(formula(formula, lhs = 0, rhs = 5), data)
@@ -267,22 +269,22 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   # ------------------------------------------------------------
   # Chunks of formula
   fdep <- formula(formula, lhs = 1, rhs = 0)
-  fex <- formula(formula, lhs = 0, rhs = 1)
-  fen <- formula(formula, lhs = 0, rhs = 2)
-  ffe <- formula(formula, lhs = 0, rhs = 4)
-  fz <- formula(formula, lhs = 0, rhs = 3)
+  fex  <- formula(formula, lhs = 0, rhs = 1)
+  fen  <- formula(formula, lhs = 0, rhs = 2)
+  ffe  <- formula(formula, lhs = 0, rhs = 4)
+  fz   <- formula(formula, lhs = 0, rhs = 3)
 
   # Generate matrices with dependent variables
-  y <- stats::model.frame(fdep, data) # some of these are not needed
+  y   <- stats::model.frame(fdep, data) # some of these are not needed
   end <- stats::model.frame(fen, data)
-  z <- stats::model.frame(fz, data)
-  fe <- stats::model.frame(ffe, data)
+  z   <- stats::model.frame(fz, data)
+  fe  <- stats::model.frame(ffe, data)
   exo <- stats::model.frame(fex, data)
 
   # -----------------
 
   endog_var <- names(end)
-  exo_var <- names(exo)
+  exo_var   <- names(exo)
 
   if (length(all.vars(fen)) > length(all.vars(fz)) & method != "within" & method != "ht") stop("Fewer instruments than endogenous variables. If you wish to use interval instrument select method fe or ht")
   if (length(all.vars(fen)) == 0 & length(all.vars(fen)) > 0) stop("External instrument is specified, but there is no endogeous variable")
@@ -300,53 +302,42 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   # --------------------------------------------------------------
   if (is.null(fitted_values) == 1) {
     if (run_time == TRUE){
-      print(Sys.time()-start)
-      print("Prepare data for the first stage...")
     }
     # This part of the code generates a list containing the data for each first stage regression.
     datalist <- data %>% dplyr::group_split(group)
-    # datalist <- NULL
-    # # If there are many groups, this line divide the dataset in smaller peaces.
-    # data$g <- round(data$group * 0.001) + 1 # It would be possible to remove this line and work directly with the groups. However, separating the problem into smaller problem is computationally faster.
-    # gg <- max(data$g)
-    #
-    #
-    # for (i in 1:gg) {
-    #   first1 <- data %>% dplyr::filter(g == i)
-    #   gr <- c(min(first1$group):max(first1$group))
-    #   datalist1 <- lapply(gr, function(gr) first1 %>% dplyr::filter(group == gr))
-    #   datalist <- c(datalist, datalist1)
-    # }
 
     # First stage ---------------------------------------------------------------------------------
     if (run_time == TRUE){
+      message("First stage estimation starting...")
       print(Sys.time()- start)
-      print("First stage estimation starting...")
+
     }
     if (is.null(cores) == 1) {
       cores <- 1
     }
     form1 <- formula(paste0(as.character(fdep)[2], "~", as.character(fex)[2], "+ ", (as.character(fen)[2])))
 
-    cl <- parallel::makeCluster(cores) # Set the number of clusters
-    parallel::clusterExport(cl, c("fdep", "md_first_stage", "form1", "quantiles", "n_small"), envir=environment()) # Functions needed
-    parallel::clusterEvalQ(cl, {
-      library(quantreg)
-    })
-    environment(fdep) <- .GlobalEnv
-    environment(form1) <- .GlobalEnv
-    environment(quantiles) <- .GlobalEnv
-    environment(md_first_stage) <- .GlobalEnv
-    environment(datalist) <- .GlobalEnv
-    environment(n_small) <- .GlobalEnv
 
-    first <- parallel::clusterApply(cl, datalist, md_first_stage, fdep, form1, quantiles, n_small)
+      future::plan(future::multisession, workers = cores, gc = T)
 
-    parallel::stopCluster(cl)
-    if (run_time == TRUE){
-      print("First stage estimation completed.")
-      print(Sys.time()- start)
-    }
+    #options(future.globals.maxSize = 8000 * 1024^2)
+    first <- furrr::future_map(datalist, md_first_stage, fdep, form1, quantiles, n_small
+    )
+    # cl <- parallel::makeCluster(cores) # Set the number of clusters
+    # parallel::clusterExport(cl, c("fdep", "md_first_stage", "form1", "datalist", "quantiles", "n_small"), envir=environment()) # Functions needed
+    # parallel::clusterEvalQ(cl, {
+    #   library(quantreg)
+    # })
+    # environment(fdep) <- .GlobalEnv
+    # environment(form1) <- .GlobalEnv
+    # environment(quantiles) <- .GlobalEnv
+    # environment(md_first_stage) <- .GlobalEnv
+    # environment(datalist) <- .GlobalEnv
+    # environment(n_small) <- .GlobalEnv
+    #
+    # first <- parallel::clusterApply(cl, datalist, md_first_stage, fdep, form1, quantiles, n_small)
+    #
+    # parallel::stopCluster(cl)
 
     # Extract Fitted values: the fitted values are a list in a list.
     fitted <- lapply(first, function(x) x[c("fitted")])
@@ -365,7 +356,8 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
 
   if (run_second == TRUE) {
     if (run_time == TRUE){
-      print("Second stage estimation starting...")
+      message("Second stage estimation starting...")
+      print(Sys.time()- start)
     }
     if (fex == "~0") {
       fex <- "~1"
@@ -502,12 +494,11 @@ mdqr <- function(formula, data, method = c("within", "be", "reoi", "regmm", "ols
   res <- list(res, second, quantiles, G)
   names(res) <- c("results", "data", "quantiles", "G" )
   if (run_time == TRUE){
-    print("total time: ")
     print(Sys.time()- start)
   }
 
   class(res) <- "mdqr"
-  print(res[[1]])
+
 
   return(res)
 

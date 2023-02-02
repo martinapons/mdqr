@@ -45,7 +45,7 @@ md_first_stage <- function(data1, fdep, form1, quantiles, n_small) {
   for (u in quantiles) {
     qreg <- quantreg::rq(y ~ mm - 1, data = data1, tau = u) # first stage quantile regression
     fitted[, 1, which(quantiles == u)] <- fitted(qreg) # Save the fitted values
-    lambda_i[, , which(quantiles == u)] <- quantreg::summary.rq(qreg, se = "ker", covariance = T)$cov / dim(data1)[1] # covariance matrix for each group
+    lambda_i[, , which(quantiles == u)] <- quantreg::summary.rq(qreg, se = "ker", covariance = T)$cov  # covariance matrix for each group
   }
   }
   store <- list(fitted, lambda_i, mm)
