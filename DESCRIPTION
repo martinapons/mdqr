@@ -12,7 +12,7 @@ Description: This package impelements the minimum distance estimator for
     package. The package contains function for the estimation, for making
     a results table, and for plotting the results.
 License: GPL-3
-URL: https://github.com/martinapons/md_package
+URL: https://github.com/martinapons/mdqr 
 Imports: 
     AER,
     dplyr,
