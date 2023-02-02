@@ -1,4 +1,4 @@
-# md_package
+# MDQR
 
 This package performs the Minimum Distance Estimator suggested in Melly and Pons (2023). 
 
