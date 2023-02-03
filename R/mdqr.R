@@ -123,7 +123,7 @@
 #' treated <- as.numeric(year >= first_treated)
 #' state_char <- rep(rnorm(S*Y), each = Ng)
 #' ind_char <- rnorm(Ng * G)
-#' # Generate the outcome. Note that we have state and year fixed effects.
+#' # Generate the outcome. Note that we have state, and year fixed effects.
 #' y <- 1 + treated + 0.5* state_char + 0.5 * ind_char + state_fe + year_fe +
 #' rnorm(Ng*G)*(1 + treated * 0.2)
 #' # Generate a data frame
