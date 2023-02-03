@@ -226,7 +226,7 @@ mdqr <- function(formula,
   start   <- Sys.time()
   formula <- Formula::as.Formula(formula)
   myvar   <- all.vars(formula)
-  data <- dplyr::select(data, tidyselect::all_of(myvar), tidyselect::all_of(clustervar) ) # dataset containing only necessary columns.
+  data <- dplyr::select(data, tidyselect::all_of(myvar), tidyselect::all_of(clustervar)) # dataset containing only necessary columns.
   data %<>% dplyr::as_tibble() %>% tidyr::drop_na() # drop observations with missing values
   group <- stats::model.frame(formula(formula, lhs = 0, rhs = 5), data)
   group_id <- names(group) # groups are defined by this variable
@@ -319,26 +319,25 @@ mdqr <- function(formula,
     form1 <- formula(paste0(as.character(fdep)[2], "~", as.character(fex)[2], "+ ", (as.character(fen)[2])))
 
 
-      future::plan(future::multisession, workers = cores, gc = T)
+    #future::plan(future::multicore, workers = cores, gc = T)
 
-    #options(future.globals.maxSize = 8000 * 1024^2)
-    first <- furrr::future_map(datalist, md_first_stage, fdep, form1, quantiles, n_small
-    )
-    # cl <- parallel::makeCluster(cores) # Set the number of clusters
-    # parallel::clusterExport(cl, c("fdep", "md_first_stage", "form1", "datalist", "quantiles", "n_small"), envir=environment()) # Functions needed
-    # parallel::clusterEvalQ(cl, {
-    #   library(quantreg)
-    # })
-    # environment(fdep) <- .GlobalEnv
-    # environment(form1) <- .GlobalEnv
-    # environment(quantiles) <- .GlobalEnv
-    # environment(md_first_stage) <- .GlobalEnv
-    # environment(datalist) <- .GlobalEnv
-    # environment(n_small) <- .GlobalEnv
-    #
-    # first <- parallel::clusterApply(cl, datalist, md_first_stage, fdep, form1, quantiles, n_small)
-    #
-    # parallel::stopCluster(cl)
+    #first <- furrr::future_map(datalist, md_first_stage, fdep, form1, quantiles, n_small
+    #)
+    cl <- parallel::makeCluster(cores) # Set the number of clusters
+    parallel::clusterExport(cl, c("fdep", "md_first_stage", "form1", "datalist", "quantiles", "n_small"), envir=environment()) # Functions needed
+    parallel::clusterEvalQ(cl, {
+      library(quantreg)
+    })
+    environment(fdep) <- .GlobalEnv
+    environment(form1) <- .GlobalEnv
+    environment(quantiles) <- .GlobalEnv
+    environment(md_first_stage) <- .GlobalEnv
+    environment(datalist) <- .GlobalEnv
+    environment(n_small) <- .GlobalEnv
+
+    first <- parallel::clusterApply(cl, datalist, md_first_stage, fdep, form1, quantiles, n_small)
+
+    parallel::stopCluster(cl)
 
     # Extract Fitted values: the fitted values are a list in a list.
     fitted <- lapply(first, function(x) x[c("fitted")])
