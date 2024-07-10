@@ -22,7 +22,7 @@ plot_mdqr <- function(object, x, level = 95, mycolor = "#0faeb6"){
     ggplot2::theme_light() +
     ggplot2::theme(legend.position = "bottom") +
     ggplot2::aes(Quantiles, Estimate) +
-    ggplot2::geom_line(size = 1, color = mycolor) +
+    ggplot2::geom_line(size = .5, color = mycolor) +
     ggplot2::geom_point(color = mycolor, shape = 20, size = 2) +
     ggplot2::geom_ribbon(aes(ymin = lb, ymax = ub), alpha = .2, fill = mycolor,color = mycolor, size = .1)
   return(plot)
