@@ -491,7 +491,7 @@ mdqr <- function(formula,
   G <- length(unique(group[!is.na(fitted[, 1])]))
 
                          # HERE I DELETE SECOND TO SAVE SPACE
-                         second <- NULL
+                         second <- 1
   # save results into a list.
   res <- list(res, second, quantiles, G)
   names(res) <- c("results", "data", "quantiles", "G" )
