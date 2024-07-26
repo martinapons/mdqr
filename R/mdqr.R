@@ -492,7 +492,7 @@ mdqr <- function(formula,
 
                          # HERE I DELETE SECOND TO SAVE SPACE
   # add an option to save the dataset with the results
-                         second <- 1
+                         second <- 0
   # save results into a list.
   res <- list(res, second, quantiles, G)
   names(res) <- c("results", "data", "quantiles", "G" )
