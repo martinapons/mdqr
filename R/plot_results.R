@@ -19,7 +19,7 @@ plot_mdqr <- function(object, x, level = 95, mycolor = "#0faeb6"){
   tab <- tab %>% dplyr::mutate(ub = Estimate + crit*`Std. Error`)
 
   plot <-  ggplot2::ggplot(data = tab) +
-    ggplot2::theme_light() +
+    ggplot2::theme_minimal() +
     ggplot2::theme(legend.position = "bottom") +
     ggplot2::aes(Quantiles, Estimate) +
     ggplot2::geom_line(size = .5, color = mycolor) +
