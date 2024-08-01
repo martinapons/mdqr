@@ -30,6 +30,7 @@
 #'   For example, to change the clustering of the errors or to change the set of second-stage fixed effects.
 #' @param run_time A logical evaluating to \code{TRUE} or \code{FALSE} indicating
 #'  whether the computation time should be printed.
+#' @param save_data A logical evaluating to \code{TRUE} or \code{FALSE} indicating whether the data should be saved.
 #' @details # Time-varying and time-constant variables / Individual-level and Group-level variables
 #'
 #' The formula automatically selects the regressors that have to be included in the first stage. If an endogenous variable is specified, either the within estimator is used or second-stage fixed effects have to be specified.
@@ -206,7 +207,8 @@ mdqr <- function(formula,
                  n_small = NULL,
                  run_second = TRUE,
                  fitted_values = NULL,
-                 run_time = FALSE
+                 run_time = FALSE,
+                 save_data = FALSE
                  ) {
 
   method = match.arg(method) # check imput arguments
@@ -490,9 +492,10 @@ mdqr <- function(formula,
   # count group that were used for estimation
   G <- length(unique(group[!is.na(fitted[, 1])]))
 
-                         # HERE I DELETE SECOND TO SAVE SPACE
-  # add an option to save the dataset with the results
-                         second <- 0
+  # option to save the dataset with the results
+  if (save_data == F){
+    second <- 0
+  }
   # save results into a list.
   res <- list(res, second, quantiles, G)
   names(res) <- c("results", "data", "quantiles", "G" )
