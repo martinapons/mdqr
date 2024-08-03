@@ -14,7 +14,8 @@ mdqr(
   n_small = NULL,
   run_second = TRUE,
   fitted_values = NULL,
-  run_time = FALSE
+  run_time = FALSE,
+  save_data = FALSE
 )
 }
 \arguments{
@@ -56,6 +57,8 @@ For example, to change the clustering of the errors or to change the set of seco
 
 \item{run_time}{A logical evaluating to \code{TRUE} or \code{FALSE} indicating
 whether the computation time should be printed.}
+
+\item{save_data}{A logical evaluating to \code{TRUE} or \code{FALSE} indicating whether the data should be saved.}
 }
 \value{
 A list of four elements. The first element contains regression results for each quantile. The second element contains the matrix of fitted values from the first stage. The third element is the vector of quantiles. The fourth elements contains the number of groups.
@@ -169,7 +172,8 @@ fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | gr
  data = dat, clustervar = "state", cores = 1)
 # Alternatively, without re-computing the first stage
 fit <- mdqr(y~treated + state_char + ind_char  | 0 | 0 | state_fe + year_fe | group, method = "ols",
- data = dat, clustervar = "state", fitted_values = fit$data[, ncol(fit$data)- length(fit$quantiles):1+1], cores = 1)
+ data = dat, clustervar = "state",
+ fitted_values = fit$data[, ncol(fit$data)- length(fit$quantiles):1+1], cores = 1)
 # Result Table
 summary_mdqr(fit, "treated")
 # Plot Results

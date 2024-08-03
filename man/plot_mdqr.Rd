@@ -4,7 +4,7 @@
 \alias{plot_mdqr}
 \title{Plot results}
 \usage{
-plot_mdqr(object, x, level = 95)
+plot_mdqr(object, x, level = 95, mycolor = "#0faeb6")
 }
 \arguments{
 \item{object}{An object of class \code{mdqr}.}
@@ -12,6 +12,8 @@ plot_mdqr(object, x, level = 95)
 \item{x}{A string containing the name of the regressor of interest}
 
 \item{level}{set confidence level; default is 95 percent.}
+
+\item{mycolor}{A string containing the color of the line and the ribbon.}
 }
 \value{
 A \code{ggplot}

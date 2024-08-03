@@ -4,6 +4,7 @@
 #' @param object An object of class \code{mdqr}.
 #' @param x A string containing the name of the regressor of interest
 #' @param level set confidence level; default is 95 percent.
+#' @param mycolor A string containing the color of the line and the ribbon.
 #' @return A \code{ggplot}
 #' @import ggplot2
 #' @details # Additional options
