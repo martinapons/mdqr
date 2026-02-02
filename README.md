@@ -184,5 +184,6 @@ plot_mdqr(fit, "treated")
 
 
 ## References
-Melly, B., & Pons, M. (2024). Minimum Distance Estimation of Quantile Panel Data Models. 
+Melly, B., & Pons, M. (2025). Minimum Distance Estimation of Quantile Panel Data Models. 
+
 
