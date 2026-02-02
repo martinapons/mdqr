@@ -1,12 +1,18 @@
 # MDQR
 
-This package performs the Minimum Distance Estimator suggested in Melly and Pons (2023). 
+This package performs the Minimum Distance Estimator suggested in Melly and Pons (2025). 
 
 ## Install the Package 
 
 ``` R
 # install package
 remotes::install_github("martinapons/mdqr")
+```
+
+``` R
+# or
+devtools::install_github("martinapons/mdqr")
+
 ```
 
 Do you prefer Stata? No worries! We also have a Stata package [here](https://github.com/bmelly/Stata).
@@ -179,3 +185,4 @@ plot_mdqr(fit, "treated")
 
 ## References
 Melly, B., & Pons, M. (2024). Minimum Distance Estimation of Quantile Panel Data Models. 
+
